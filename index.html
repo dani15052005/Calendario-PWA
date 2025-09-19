@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Colores del navegador (adaptados a claro/oscuro) -->
+  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: dark)">
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Favicons (mantengo tus rutas actuales para no romper) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/logo-red-192.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/logo-red-192.png">
+  <!-- iOS -->
+  <link rel="apple-touch-icon" href="icons/logo-red-192.png">
+
+  <!-- Google Identity Services (para importar desde Google Calendar si lo usas) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <link rel="stylesheet" href="styles.css" />
+  <title>Calendario PWA</title>
+</head>
+<body>
+  <noscript>Esta app requiere JavaScript.</noscript>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <button id="menuBtn" class="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="drawer">
+      <span></span><span></span><span></span>
+    </button>
+
+    <!-- Logo interior que cambia con el tema -->
+    <img id="cornerBrand" class="app-logo" alt="Logo calendario" width="28" height="28" />
+
+    <h1 class="app-title" id="appTitle">mayo</h1>
+
+    <!-- Buscador (form semántico) -->
+    <form class="search-wrap" id="searchWrap" role="search" onsubmit="return false;">
+      <input
+        id="searchInput"
+        type="search"
+        placeholder='Buscar… ej. “reunión”, “Madrid”, “Ana”'
+        aria-label="Buscar eventos"
+        autocomplete="off" />
+      <button id="clearSearch" class="ghost" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>
+      <div id="searchResults" class="search-results" aria-live="polite"></div>
+    </form>
+  </header>
+
+  <!-- Drawer lateral -->
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Opciones</h2>
+      <button id="closeDrawer" class="ghost" aria-label="Cerrar menú">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Vista</h3>
+      <div class="segmented" role="radiogroup" aria-label="Cambiar vista del calendario">
+        <label><input type="radio" name="viewMode" value="month" checked /> Mes</label>
+        <label><input type="radio" name="viewMode" value="week" /> Semana</label>
+        <label><input type="radio" name="viewMode" value="3days" /> 3 días</label>
+        <label><input type="radio" name="viewMode" value="day" /> Día</label>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Filtrar por categoría</h3>
+      <div class="checks">
+        <label><input type="checkbox" class="cat-filter" value="Trabajo" checked /> Trabajo</label>
+        <label><input type="checkbox" class="cat-filter" value="Tarea" checked /> Tarea</label>
+        <label><input type="checkbox" class="cat-filter" value="Citas" checked /> Citas</label>
+        <label><input type="checkbox" class="cat-filter" value="Cumpleaños" checked /> Cumpleaños</label>
+        <label><input type="checkbox" class="cat-filter" value="Otros" checked /> Otros</label>
+        <label><input type="checkbox" class="cat-filter" value="Festivo" checked /> Festivo</label>
+      </div>
+      <button id="toggleAllCats" class="small" aria-label="Marcar o desmarcar todas las categorías">Marcar/Desmarcar todos</button>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Tema</h3>
+      <button id="themeToggle" class="theme-toggle">Cambiar a Light</button>
+    </div>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+  <main class="layout" role="main">
+    <!-- Vista MES -->
+    <section id="monthView" class="calendar-panel" aria-label="Calendario mensual">
+      <div class="calendar-nav" role="toolbar" aria-label="Navegación de calendario">
+        <div class="nav-left">
+          <button id="prevYear" aria-label="Año anterior">« Año</button>
+          <button id="prevMonth" aria-label="Mes anterior">‹ Mes</button>
+        </div>
+        <div class="nav-center">
+          <button id="todayBtn" class="primary" aria-label="Ir a hoy">Hoy</button>
+          <div class="month-title" id="monthTitle" aria-live="polite">—</div>
+        </div>
+        <div class="nav-right">
+          <button id="nextMonth" aria-label="Mes siguiente">Mes ›</button>
+          <button id="nextYear" aria-label="Año siguiente">Año »</button>
+        </div>
+      </div>
+
+      <div class="jump-row">
+        <label for="jumpDate">Ir a fecha: </label>
+        <input id="jumpDate" type="date" />
+        <button id="jumpBtn" aria-label="Ir a la fecha seleccionada en el calendario" aria-controls="calendarGrid">Ir</button>
+      </div>
+
+      <div class="weekday-row" aria-hidden="true">
+        <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+      </div>
+
+      <div id="calendarGrid" class="calendar-grid" aria-live="polite"></div>
+    </section>
+
+    <!-- Vista de TIEMPO (Semana / 3 días / Día) -->
+    <section id="timeView" class="time-panel hidden" aria-label="Vista de tiempo">
+      <header class="time-header">
+        <button id="backToMonth" class="ghost" aria-label="Volver a vista mes">← Mes</button>
+        <div id="timeRangeTitle" class="time-title">—</div>
+      </header>
+
+      <!-- Cabecera de días -->
+      <div id="timeDaysHeader" class="time-days-header"></div>
+
+      <!-- Grid de horas y eventos -->
+      <div id="timeGrid" class="time-grid"><!-- filas de horas + columnas por día --></div>
+
+      <!-- Mensaje vacío solo para vista Día -->
+      <div id="dayEmptyMsg" class="empty hidden">Aun no hay eventos para este dia</div>
+    </section>
+  </main>
+
+  <!-- FAB principal -->
+  <button id="globalAddFab" class="fab" title="Añadir evento" aria-label="Añadir evento">
+    <!-- + -->
+    <svg class="icon icon-plus" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H6a1 1 0 1 1 0-2h5V6a1 1 0 0 1 1-1z"/>
+    </svg>
+    <!-- calendario (aparece al abrir) -->
+    <svg class="icon icon-cal hidden" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1zM5 10h14v8H5zM5 8h14V6H5z"/>
+    </svg>
+  </button>
+
+  <!-- Menú del FAB (speed-dial) -->
+  <div id="fabMenu" class="fab-menu" aria-hidden="true">
+    <!-- Cumpleaños: mini tarta -->
+    <button id="fabBirthday" class="fab-mini" title="Añadir cumpleaños" aria-label="Añadir cumpleaños">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 6v3" />
+        <path d="M12 3c1.3 1.2 1.3 2.8 0 4c-1.3-1.2-1.3-2.8 0-4z"/>
+        <path d="M3 12c1 .9 2 .9 3 0s2-.9 3 0 2 .9 3 0 2-.9 3 0 2 .9 3 0 2-.9 3 0" />
+        <rect x="3" y="12" width="18" height="5" rx="1" ry="1"/>
+      </svg>
+      <span>Cumpleaños</span>
+    </button>
+
+    <!-- Tarea: folio con lápiz -->
+    <button id="fabTask" class="fab-mini" title="Añadir tarea" aria-label="Añadir tarea">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+        <path d="M15 3v4h4"/>
+        <path d="M7 17l7.5-7.5 3 3L10 20H7z"/>
+        <path d="M14.5 9.5l2 2"/>
+      </svg>
+      <span>Tarea</span>
+    </button>
+  </div>
+
+  <!-- Sheet / Panel para Añadir/Editar evento -->
+  <section id="addEventSheet" class="sheet hidden" aria-label="Añadir o editar evento">
+    <header class="sheet-head">
+      <h3 id="sheetTitle">Añadir evento</h3>
+      <button id="closeSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+    </header>
+
+    <form id="eventForm" class="event-form" novalidate>
+      <input type="hidden" id="eventId" />
+
+      <label for="eventDate">Fecha *</label>
+      <input id="eventDate" type="date" required />
+
+      <label for="eventTime">Hora *</label>
+      <input id="eventTime" type="time" required />
+
+      <label for="eventTitle">Nombre del evento *</label>
+      <input id="eventTitle" type="text" required placeholder="p. ej., Reunión / Cumple de Ana" />
+
+      <label for="eventLocation">Ubicación</label>
+      <input id="eventLocation" type="text" placeholder="Oficina, Zoom…" />
+
+      <label for="eventClient">Cliente (opcional)</label>
+      <input id="eventClient" type="text" placeholder="Nombre del cliente" />
+
+      <label for="eventCategory">Categoría *</label>
+      <select id="eventCategory" required>
+        <option value="Trabajo">Trabajo</option>
+        <option value="Tarea">Tarea</option>
+        <option value="Citas">Citas</option>
+        <option value="Cumpleaños">Cumpleaños</option>
+        <option value="Otros">Otros…</option>
+      </select>
+
+      <div id="categoryOtherWrap" class="hidden">
+        <label for="eventCategoryOther">Nombre de categoría (Otros)</label>
+        <input id="eventCategoryOther" type="text" placeholder="Especifica la categoría" />
+      </div>
+
+      <label for="eventFiles">Adjuntos (imágenes, videos, archivos)</label>
+      <input id="eventFiles" type="file" multiple />
+
+      <div id="attachmentsPreview" class="attachments-preview"></div>
+
+      <menu class="dialog-actions">
+        <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
+        <div class="spacer"></div>
+        <button type="button" id="cancelEventBtn" class="ghost">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </menu>
+    </form>
+  </section>
+
+  <!-- Sheet / Panel para Añadir CUMPLEAÑOS -->
+  <section id="addBirthdaySheet" class="sheet hidden" aria-label="Añadir cumpleaños">
+    <header class="sheet-head">
+      <h3>Añadir cumpleaños</h3>
+      <button id="closeBirthdaySheet" class="ghost" aria-label="Cerrar panel">✕</button>
+    </header>
+
+    <form id="birthdayForm" class="event-form" novalidate>
+      <input type="hidden" name="id" />
+      <label>Fecha *</label>
+      <input name="date" type="date" required />
+
+      <label>Hora *</label>
+      <input name="time" type="time" required value="10:00" />
+
+      <label>Nombre *</label>
+      <input name="title" type="text" required placeholder="Cumple de…" />
+
+      <label>Ubicación</label>
+      <input name="location" type="text" placeholder="Lugar de la celebración" />
+
+      <label>Persona</label>
+      <input name="client" type="text" placeholder="Nombre de la persona" />
+
+      <!-- adjuntos opcionales -->
+      <label>Adjuntos</label>
+      <input name="files" type="file" multiple />
+
+      <menu class="dialog-actions">
+        <div class="spacer"></div>
+        <button type="button" id="cancelBirthdayBtn" class="ghost">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </menu>
+    </form>
+  </section>
+
+  <!-- Sheet / Panel para Añadir TAREA -->
+  <section id="addTaskSheet" class="sheet hidden" aria-label="Añadir tarea">
+    <header class="sheet-head">
+      <h3>Añadir tarea</h3>
+      <button id="closeTaskSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+    </header>
+
+    <form id="taskForm" class="event-form" novalidate>
+      <input type="hidden" name="id" />
+      <label>Fecha *</label>
+      <input name="date" type="date" required />
+
+      <label>Hora *</label>
+      <input name="time" type="time" required value="10:00" />
+
+      <label>Título de la tarea *</label>
+      <input name="title" type="text" required placeholder="Tarea…" />
+
+      <label>Ubicación</label>
+      <input name="location" type="text" placeholder="Oficina, domicilio…" />
+
+      <label>Cliente (opcional)</label>
+      <input name="client" type="text" placeholder="Nombre del cliente" />
+
+      <label>Adjuntos</label>
+      <input name="files" type="file" multiple />
+
+      <menu class="dialog-actions">
+        <div class="spacer"></div>
+        <button type="button" id="cancelTaskBtn" class="ghost">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </menu>
+    </form>
+  </section>
+
+  <!-- Templates -->
+  <template id="pillTpl">
+    <div class="event-pill">
+      <span class="pill-time"></span>
+      <span class="pill-title"></span>
+    </div>
+  </template>
+
+  <script src="script.js" type="module"></script>
+  <script>
+    if (
+      'serviceWorker' in navigator &&
+      (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(console.error);
+      });
+    }
+  </script>
+</body>
+</html>
