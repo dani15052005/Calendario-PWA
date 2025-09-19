@@ -63,20 +63,22 @@
   </main>
 
   <script>
-    // Reintentar carga
-    document.getElementById('retryBtn')?.addEventListener('click', () => location.reload());
+  // Reintentar carga
+  var rb = document.getElementById('retryBtn');
+  if (rb) rb.addEventListener('click', function(){ location.reload(); });
 
-    // Si vuelve la conexión, redirige sola al calendario
-    function goIfOnline() {
-      if (navigator.onLine) {
-        document.getElementById('onlineHint').textContent = 'Conexión recuperada. Redirigiendo…';
-        // pequeño delay para que el SW/Cache esté listo
-        setTimeout(() => location.replace('./'), 250);
-      }
+  // Si vuelve la conexión, redirige sola al calendario
+  function goIfOnline() {
+    if (navigator.onLine) {
+      var hint = document.getElementById('onlineHint');
+      if (hint) hint.textContent = 'Conexión recuperada. Redirigiendo…';
+      // pequeño delay para que el SW/Cache esté listo
+      setTimeout(function(){ location.replace('./'); }, 250);
     }
-    window.addEventListener('online', goIfOnline);
-    // Por si llega ya con conexión restablecida
-    goIfOnline();
-  </script>
+  }
+  window.addEventListener('online', goIfOnline);
+  // Por si llega ya con conexión restablecida
+  goIfOnline();
+</script>
 </body>
 </html>

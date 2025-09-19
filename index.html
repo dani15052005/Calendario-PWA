@@ -42,7 +42,7 @@
     </button>
 
     <!-- Logo interior que cambia con el tema -->
-    <img id="cornerBrand" class="app-logo" alt="Logo calendario" width="28" height="28" />
+<img id="cornerBrand" class="app-logo" src="icons/logo-dark@3x.png" alt="Logo calendario" width="28" height="28" />
 
     <h1 class="app-title" id="appTitle">mayo</h1>
 
@@ -54,7 +54,7 @@
         placeholder='Buscar… ej. “reunión”, “Madrid”, “Ana”'
         aria-label="Buscar eventos"
         autocomplete="off" />
-      <button id="clearSearch" class="ghost" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>
+      <button id="clearSearch" type="button" class="ghost" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>
       <div id="searchResults" class="search-results" aria-live="polite"></div>
     </form>
   </header>
@@ -141,7 +141,7 @@
       <div id="timeGrid" class="time-grid"><!-- filas de horas + columnas por día --></div>
 
       <!-- Mensaje vacío solo para vista Día -->
-      <div id="dayEmptyMsg" class="empty hidden">Aun no hay eventos para este dia</div>
+      <div id="dayEmptyMsg" class="empty hidden">Aún no hay eventos para este día</div>
     </section>
   </main>
 
@@ -236,94 +236,128 @@
   </section>
 
   <!-- Sheet / Panel para Añadir CUMPLEAÑOS -->
-  <section id="addBirthdaySheet" class="sheet hidden" aria-label="Añadir cumpleaños">
-    <header class="sheet-head">
-      <h3>Añadir cumpleaños</h3>
-      <button id="closeBirthdaySheet" class="ghost" aria-label="Cerrar panel">✕</button>
-    </header>
+<section id="addBirthdaySheet" class="sheet hidden" aria-label="Añadir cumpleaños">
+  <header class="sheet-head">
+    <h3>Añadir cumpleaños</h3>
+    <button id="closeBirthdaySheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
 
-    <form id="birthdayForm" class="event-form" novalidate>
-      <input type="hidden" name="id" />
-      <label>Fecha *</label>
-      <input name="date" type="date" required />
+  <form id="birthdayForm" class="event-form" novalidate>
+    <input type="hidden" name="id" />
 
-      <label>Hora *</label>
-      <input name="time" type="time" required value="10:00" />
+    <label for="birthdayDate">Fecha *</label>
+    <input id="birthdayDate" name="date" type="date" required />
 
-      <label>Nombre *</label>
-      <input name="title" type="text" required placeholder="Cumple de…" />
+    <label for="birthdayTime">Hora *</label>
+    <input id="birthdayTime" name="time" type="time" required value="10:00" />
 
-      <label>Ubicación</label>
-      <input name="location" type="text" placeholder="Lugar de la celebración" />
+    <label for="birthdayTitle">Nombre *</label>
+    <input id="birthdayTitle" name="title" type="text" required placeholder="Cumple de…" />
 
-      <label>Persona</label>
-      <input name="client" type="text" placeholder="Nombre de la persona" />
+    <label for="birthdayLocation">Ubicación</label>
+    <input id="birthdayLocation" name="location" type="text" placeholder="Lugar de la celebración" />
 
-      <!-- adjuntos opcionales -->
-      <label>Adjuntos</label>
-      <input name="files" type="file" multiple />
+    <label for="birthdayClient">Persona</label>
+    <input id="birthdayClient" name="client" type="text" placeholder="Nombre de la persona" />
 
-      <menu class="dialog-actions">
-        <div class="spacer"></div>
-        <button type="button" id="cancelBirthdayBtn" class="ghost">Cancelar</button>
-        <button type="submit" class="primary">Guardar</button>
-      </menu>
-    </form>
-  </section>
+    <label for="birthdayFiles">Adjuntos</label>
+    <input id="birthdayFiles" name="files" type="file" multiple />
+
+    <menu class="dialog-actions">
+      <div class="spacer"></div>
+      <button type="button" id="cancelBirthdayBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
 
   <!-- Sheet / Panel para Añadir TAREA -->
-  <section id="addTaskSheet" class="sheet hidden" aria-label="Añadir tarea">
-    <header class="sheet-head">
-      <h3>Añadir tarea</h3>
-      <button id="closeTaskSheet" class="ghost" aria-label="Cerrar panel">✕</button>
-    </header>
+<section id="addTaskSheet" class="sheet hidden" aria-label="Añadir tarea">
+  <header class="sheet-head">
+    <h3>Añadir tarea</h3>
+    <button id="closeTaskSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
 
-    <form id="taskForm" class="event-form" novalidate>
-      <input type="hidden" name="id" />
-      <label>Fecha *</label>
-      <input name="date" type="date" required />
+  <form id="taskForm" class="event-form" novalidate>
+    <input type="hidden" name="id" />
 
-      <label>Hora *</label>
-      <input name="time" type="time" required value="10:00" />
+    <label for="taskDate">Fecha *</label>
+    <input id="taskDate" name="date" type="date" required />
 
-      <label>Título de la tarea *</label>
-      <input name="title" type="text" required placeholder="Tarea…" />
+    <label for="taskTime">Hora *</label>
+    <input id="taskTime" name="time" type="time" required value="10:00" />
 
-      <label>Ubicación</label>
-      <input name="location" type="text" placeholder="Oficina, domicilio…" />
+    <label for="taskTitle">Título de la tarea *</label>
+    <input id="taskTitle" name="title" type="text" required placeholder="Tarea…" />
 
-      <label>Cliente (opcional)</label>
-      <input name="client" type="text" placeholder="Nombre del cliente" />
+    <label for="taskLocation">Ubicación</label>
+    <input id="taskLocation" name="location" type="text" placeholder="Oficina, domicilio…" />
 
-      <label>Adjuntos</label>
-      <input name="files" type="file" multiple />
+    <label for="taskClient">Cliente (opcional)</label>
+    <input id="taskClient" name="client" type="text" placeholder="Nombre del cliente" />
 
-      <menu class="dialog-actions">
-        <div class="spacer"></div>
-        <button type="button" id="cancelTaskBtn" class="ghost">Cancelar</button>
-        <button type="submit" class="primary">Guardar</button>
-      </menu>
-    </form>
-  </section>
+    <label for="taskFiles">Adjuntos</label>
+    <input id="taskFiles" name="files" type="file" multiple />
+
+    <menu class="dialog-actions">
+      <div class="spacer"></div>
+      <button type="button" id="cancelTaskBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
 
   <!-- Templates -->
-  <template id="pillTpl">
-    <div class="event-pill">
-      <span class="pill-time"></span>
-      <span class="pill-title"></span>
-    </div>
-  </template>
+<template id="pillTpl">
+  <div class="event-pill">
+    <span class="pill-time"></span>
+    <span class="pill-title"></span>
+  </div>
+</template>
 
-  <script src="script.js" type="module"></script>
-  <script>
-    if (
-      'serviceWorker' in navigator &&
-      (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(console.error);
-      });
-    }
-  </script>
+<!-- ===== Force Update Gate ===== -->
+<section id="updateGate" class="update-gate hidden" role="dialog" aria-modal="true" aria-labelledby="updTitle" aria-describedby="updDesc" aria-hidden="true">
+  <div class="ug-backdrop">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+  </div>
+
+  <div class="ug-card">
+    <header class="ug-head">
+      <svg class="ug-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2zm1 5v6a1 1 0 0 1-2 0V7a1 1 0 1 1 2 0zm-1 10.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+      </svg>
+      <h3 id="updTitle">Actualización disponible</h3>
+    </header>
+
+    <p id="updDesc" class="ug-text">
+      Para seguir usando la app necesitas actualizar a la última versión.
+    </p>
+
+    <div class="ug-meta">
+      <span id="currentVer" class="tag">Actual: —</span>
+      <span id="requiredVer" class="tag">Requerida: —</span>
+    </div>
+
+    <button id="updateNowBtn" class="ug-btn primary">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Actualizar ahora</span>
+    </button>
+
+    <a id="releaseNotesLink" class="ug-link" href="#" onclick="event.preventDefault()" target="_blank" rel="noopener">Ver novedades</a>
+  </div>
+</section>
+
+<script src="script.js?v=1004"></script>
+<script>
+  if (
+    'serviceWorker' in navigator &&
+    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(console.error);
+    });
+  }
+</script>
 </body>
 </html>

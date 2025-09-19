@@ -1,5 +1,5 @@
 // === sw.js (v1.0.11) – modo dev: network-first para .js/.css, rutas relativas en precache ===
-const VERSION = 'v1.0.32';
+const VERSION = 'v1.0.33';
 const STATIC_CACHE = `static-${VERSION}`;
 const STATIC_ASSETS = [
   './', './index.html', './styles.css', './script.js',
@@ -27,8 +27,18 @@ self.addEventListener('activate', (event) => {
       .filter(k => k.startsWith('static-') && k !== STATIC_CACHE)
       .map(k => caches.delete(k)));
     await self.clients.claim();
+
+    // limpiar app-version.json obsoletos
+    const cache = await caches.open(STATIC_CACHE);
+    const reqs = await cache.keys();
+    await Promise.all(
+      reqs
+        .filter(r => new URL(r.url).pathname.endsWith('/app-version.json'))
+        .map(r => cache.delete(r))
+    );
   })());
 });
+
 
 self.addEventListener('message', (event) => {
   const data = event.data;
@@ -49,6 +59,18 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // --- app-version.json: siempre red, sin cachear ---
+if (url.origin === self.location.origin && url.pathname.endsWith('/app-version.json')) {
+  event.respondWith(
+    fetch(req, { cache: 'no-cache' }).catch(async () => {
+      // Si no hay red, no respondemos de caché para forzar bloqueo persistente.
+      // Devuelve un JSON vacío como último recurso.
+      return new Response('{}', { headers: { 'Content-Type': 'application/json' } });
+    })
+  );
+  return;
+}
 
   // Navegación de páginas (SPA)
   if (isHTMLNavigation(req)) {
@@ -95,13 +117,22 @@ async function networkFirstNav(request) {
   const cache = await caches.open(STATIC_CACHE);
   try {
     const fresh = await fetch(request);
-    // Actualiza raíz/index si aplica
-    const root = new URL('./', self.location).href;
-    if (new URL(request.url).href === root || new URL(request.url).pathname === '/') {
-      cache.put(root, fresh.clone());
-      cache.put(new URL('./index.html', self.location).href, fresh.clone());
-    }
-    return fresh;
+
+// Raíz real del scope del SW (sirve para GitHub Pages / subcarpetas)
+const scopeURL = new URL(self.registration.scope);
+const reqURL   = new URL(request.url);
+
+// ¿navegas a la raíz del scope o a su index.html?
+const isScopeRoot  = reqURL.pathname === scopeURL.pathname;
+const isScopeIndex = reqURL.pathname === scopeURL.pathname + 'index.html';
+
+if (isScopeRoot || isScopeIndex) {
+  await cache.put(scopeURL.href, fresh.clone());
+  await cache.put(new URL('index.html', scopeURL).href, fresh.clone());
+}
+
+return fresh;
+
   } catch {
     const cached = await cache.match(request) ||
                    await cache.match(new URL('./index.html', self.location)) ||

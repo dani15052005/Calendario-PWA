@@ -1,5 +1,5 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "Calendario PWA",
   "short_name": "Calendario",
   "description": "Calendario estilo Google Calendar con búsqueda, adjuntos y soporte offline.",
@@ -29,5 +29,5 @@
     "url": "./?view=week",
     "icons": [{ "src": "icons/logo-red-192.png", "sizes": "192x192" }]
   }
-]
+ ]
 }

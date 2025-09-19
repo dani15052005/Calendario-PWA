@@ -1,5 +1,15 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
+// ===== Versionado obligatorio =====
+window.__APP_VERSION__ = '1.0.0';   // <-- cambia en cada despliegue
+const VERSION_ENDPOINT = './app-version.json';
+
+async function fetchVersionManifest() {
+  const res = await fetch(VERSION_ENDPOINT, { cache: 'no-store' }); // evita caché
+  if (!res.ok) throw new Error('No se pudo leer app-version.json');
+  return res.json();
+}
+
 
 // Evita aplicar resultados de renders antiguos
 let monthRenderToken = 0;
@@ -7,6 +17,45 @@ let monthRenderToken = 0;
 // ===================== Utilidades =====================
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function cmpSemver(a,b){
+  const pa = String(a).split('.').map(n=>parseInt(n||0,10));
+  const pb = String(b).split('.').map(n=>parseInt(n||0,10));
+  for (let i=0;i<3;i++){ const da=(pa[i]||0)-(pb[i]||0); if (da) return Math.sign(da); }
+  return 0;
+}
+function qs(el){ return document.querySelector(el); }
+
+function showUpdateGate(minReq, latest, notes){
+  document.body.classList.add('update-block');
+  const gate = qs('#updateGate');
+
+  qs('#currentVer').textContent  = `Actual: ${window.__APP_VERSION__}`;
+  qs('#requiredVer').textContent = `Requerida: ${minReq}`;
+
+  const link = qs('#releaseNotesLink');
+  if (link) {
+    if (notes && typeof notes === 'string') {
+      link.href = notes;
+      link.style.display = 'block';
+      link.setAttribute('target','_blank');
+      link.setAttribute('rel','noopener');
+    } else {
+      link.style.display = 'none';
+      link.removeAttribute('href');
+    }
+  }
+
+  gate.classList.remove('hidden');
+  localStorage.setItem('forceUpdate.min', minReq);
+}
+
+
+function hideUpdateGate(){
+  document.body.classList.remove('update-block');
+  qs('#updateGate')?.classList.add('hidden');
+  localStorage.removeItem('forceUpdate.min');
+}
 
 const on = (selOrEl, evt, handler, opts) => {
   const el = typeof selOrEl === 'string' ? $(selOrEl) : selOrEl;
@@ -25,6 +74,123 @@ const DAY_START_H = 7;
 const DAY_END_H   = 18;
 const PX_PER_HOUR = 60;
 const PX_PER_MIN  = PX_PER_HOUR / 60;
+
+// ===== Snapshot & Restore de eventos + adjuntos =====
+async function snapshotEventAndAttachments(eventId){
+  let ev = null;
+  const atts = [];
+  await tx(['events','attachments'], 'readonly', (eventsStore, attStore) => {
+    const g = eventsStore.get(eventId);
+    g.onsuccess = () => { if (g.result) ev = { ...g.result }; };
+    const idx = attStore.index('by_event');
+    const req = idx.openCursor(IDBKeyRange.only(eventId));
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      atts.push({ ...cur.value }); // clon superficial suficiente (Blob se mantiene)
+      cur.continue();
+    };
+  });
+  return { event: ev, atts };
+}
+
+async function deleteAllAttachmentsForEvent(eventId){
+  await tx(['attachments'], 'readwrite', (attStore) => {
+    const idx = attStore.index('by_event');
+    const req = idx.openCursor(IDBKeyRange.only(eventId));
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      attStore.delete(cur.primaryKey);
+      cur.continue();
+    };
+  });
+}
+
+async function restoreEventAndAttachments(ev, atts){
+  if (!ev) return;
+  // 1) borrar adjuntos actuales
+  await deleteAllAttachmentsForEvent(ev.id);
+  // 2) restaurar adjuntos del snapshot
+  await tx(['attachments'], 'readwrite', (attStore) => {
+    for (const a of atts) attStore.put(a);
+  });
+  // 3) restaurar el propio evento (campos)
+  await tx(['events'], 'readwrite', (eventsStore) => eventsStore.put(ev));
+}
+
+// ===== Confirm "nativo" con <dialog> (fallback a window.confirm) =====
+function ensureConfirmDialog() {
+  let dlg = document.getElementById('confirmModal');
+  if (dlg) return dlg;
+
+  dlg = document.createElement('dialog');
+  dlg.id = 'confirmModal';
+  dlg.className = 'confirm-modal';
+  dlg.innerHTML = `
+    <form method="dialog">
+      <div class="confirm-wrap">
+        <div class="confirm-head">
+          <div class="confirm-icon" aria-hidden="true">⚠️</div>
+          <div>
+            <div class="confirm-title" id="cmTitle">Confirmar</div>
+            <p class="confirm-text" id="cmText"></p>
+          </div>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button value="cancel" type="submit" class="btn" id="cmCancel">Cancelar</button>
+        <button value="ok"     type="submit" class="btn primary" id="cmOk">Aceptar</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(dlg);
+  return dlg;
+}
+
+/**
+ * confirmNative({ title, message, confirmText, cancelText, destructive })
+ * @returns {Promise<boolean>}
+ */
+function confirmNative(opts = {}) {
+  const support = typeof window.HTMLDialogElement === 'function';
+  if (!support) {
+    return Promise.resolve(window.confirm(opts.message || '¿Seguro?'));
+  }
+  const {
+    title = 'Confirmar',
+    message = '¿Seguro?',
+    confirmText = 'Aceptar',
+    cancelText = 'Cancelar',
+    destructive = false
+  } = opts;
+
+  const dlg = ensureConfirmDialog();
+  const titleEl = dlg.querySelector('#cmTitle');
+  const textEl  = dlg.querySelector('#cmText');
+  const okBtn   = dlg.querySelector('#cmOk');
+  const cancelBtn = dlg.querySelector('#cmCancel');
+
+  titleEl.textContent = title;
+  textEl.textContent  = message;
+  okBtn.textContent   = confirmText;
+  cancelBtn.textContent = cancelText;
+
+  okBtn.classList.toggle('danger', !!destructive);
+  okBtn.classList.toggle('primary', !destructive);
+
+  return new Promise((resolve) => {
+    const onClose = () => {
+      dlg.removeEventListener('close', onClose);
+      resolve(dlg.returnValue === 'ok');
+    };
+    dlg.addEventListener('close', onClose, { once: true });
+
+    // Accesibilidad: Enter = confirmar, Esc = cancelar (lo maneja el dialog)
+    // Foco inicial en Cancelar (como hace iOS), cambiar a okBtn si prefieres
+    setTimeout(() => cancelBtn.focus(), 0);
+
+    dlg.showModal();
+  });
+}
 
 // ===================== Estado =====================
 const state = {
@@ -428,21 +594,36 @@ async function getEventsByDate(dateStr) {
 
 async function saveEvent(ev) {
   ev.preventDefault();
-  const id = $('#eventId')?.value || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+
+  const idInput = $('#eventId');
+  const id = idInput?.value || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+
   const dateStr = $('#eventDate')?.value;
   const time = $('#eventTime')?.value;
-  const title = $('#eventTitle')?.value.trim();
-  const location = $('#eventLocation')?.value.trim();
-  const client = $('#eventClient')?.value.trim();
+  const title = $('#eventTitle')?.value?.trim();
+  const location = $('#eventLocation')?.value?.trim() || '';
+  const client = $('#eventClient')?.value?.trim() || '';
   const category = $('#eventCategory')?.value;
-  const categoryOther = (category === 'Otros') ? ($('#eventCategoryOther')?.value.trim() || '') : '';
+  const categoryOther = (category === 'Otros') ? ($('#eventCategoryOther')?.value?.trim() || '') : '';
   const files = $('#eventFiles')?.files;
 
   if (!dateStr || !time || !title || !category) return;
 
-  const evt = { id, date: dateStr, time, title, location, client, category, categoryOther, monthKey: dateStr.slice(0,7), createdAt: Date.now() };
+  const isEdit = !!idInput?.value;
+  let snapshot = null;
+  if (isEdit) {
+    // guarda estado anterior para poder deshacer edición (incluye adjuntos)
+    snapshot = await snapshotEventAndAttachments(id);
+  }
 
-  await tx(['events','attachments'], 'readwrite', (eventsStore, attStore) => {
+  const evt = {
+    id, date: dateStr, time, title, location, client,
+    category, categoryOther,
+    monthKey: dateStr.slice(0,7),
+    createdAt: snapshot?.event?.createdAt || Date.now()
+  };
+
+  await tx(['events', 'attachments'], 'readwrite', (eventsStore, attStore) => {
     eventsStore.put(evt);
     if (files && files.length) {
       for (const f of files) {
@@ -453,42 +634,70 @@ async function saveEvent(ev) {
   });
 
   closeSheet();
-  if (state.viewMode === 'month') renderCalendar(state.currentMonth);
-  else renderTimeView(state.viewMode, state.selectedDate || new Date());
+  reRender();
+
+  showToast(isEdit ? 'Evento actualizado' : 'Evento creado', {
+    actionLabel: 'Deshacer',
+    onUndo: async () => {
+      if (isEdit && snapshot?.event) {
+        // revertir por completo la edición (datos y adjuntos)
+        await restoreEventAndAttachments(snapshot.event, snapshot.atts);
+      } else {
+        // si fue creación nueva, deshacer = eliminar
+        await deleteEvent(id, { silent: true });
+      }
+      reRender();
+    }
+  });
 }
 
-async function deleteEvent(id) {
-  await tx(['events','attachments'],'readwrite',(eventsStore, attStore) => {
+async function deleteEvent(id, { silent = false } = {}) {
+  if (!id) return;
+
+  // snapshot para poder deshacer la eliminación
+  const snap = await snapshotEventAndAttachments(id);
+
+  await tx(['events','attachments'], 'readwrite', (eventsStore, attStore) => {
     eventsStore.delete(id);
     const idx = attStore.index('by_event');
     const req = idx.openCursor(IDBKeyRange.only(id));
-    req.onsuccess = () => { const cur = req.result; if (cur){ attStore.delete(cur.primaryKey); cur.continue(); } };
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      attStore.delete(cur.primaryKey);
+      cur.continue();
+    };
   });
+
   closeSheet();
-  if (state.viewMode === 'month') renderCalendar(state.currentMonth);
-  else renderTimeView(state.viewMode, state.selectedDate || new Date());
+  reRender();
+
+  if (!silent) {
+    showToast('Evento eliminado', {
+      actionLabel: 'Deshacer',
+      onUndo: async () => {
+        // restaurar evento + todos los adjuntos tal cual estaban
+        await restoreEventAndAttachments(snap.event, snap.atts);
+        reRender();
+      }
+    });
+  }
 }
 
-// Guardado genérico para Cumpleaños / Tarea
 async function saveEventFromForm(ev, category){
   ev.preventDefault();
-  const form = ev.target;
-
-  const idInput = form.querySelector('[name="id"]');
-  const dateStr = form.querySelector('[name="date"]')?.value;
-  const time    = form.querySelector('[name="time"]')?.value;
-  const title   = form.querySelector('[name="title"]')?.value?.trim();
-  const location= form.querySelector('[name="location"]')?.value?.trim() || '';
-  const client  = form.querySelector('[name="client"]')?.value?.trim() || '';
-  const filesEl = form.querySelector('[name="files"]');
+  const form     = ev.target;
+  const idInput  = form.querySelector('[name="id"]');
+  const dateStr  = form.querySelector('[name="date"]')?.value;
+  const time     = form.querySelector('[name="time"]')?.value;
+  const title    = form.querySelector('[name="title"]')?.value?.trim();
+  const location = form.querySelector('[name="location"]')?.value?.trim() || '';
+  const client   = form.querySelector('[name="client"]')?.value?.trim() || '';
+  const filesEl  = form.querySelector('[name="files"]');
 
   if (!dateStr || !time || !title) return;
 
-  const id = (idInput?.value) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-  const evt = {
-    id, date: dateStr, time, title, location, client,
-    category, categoryOther: '', monthKey: dateStr.slice(0,7), createdAt: Date.now()
-  };
+  const id  = (idInput?.value) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+  const evt = { id, date: dateStr, time, title, location, client, category, categoryOther: '', monthKey: dateStr.slice(0,7), createdAt: Date.now() };
 
   await tx(['events','attachments'],'readwrite',(eventsStore, attStore) => {
     eventsStore.put(evt);
@@ -503,8 +712,15 @@ async function saveEventFromForm(ev, category){
   if (category === 'Cumpleaños') closeSheetById('addBirthdaySheet');
   else if (category === 'Tarea') closeSheetById('addTaskSheet');
 
-  if (state.viewMode === 'month') renderCalendar(state.currentMonth);
-  else renderTimeView(state.viewMode, state.selectedDate || new Date());
+  reRender();
+
+  showToast(`${category} creado`, {
+    actionLabel: 'Deshacer',
+    onUndo: async () => {
+      await deleteEvent(id, { silent: true });
+      reRender();
+    }
+  });
 }
 
 // ===================== Adjuntos =====================
@@ -855,6 +1071,98 @@ function injectEnhancementStyles(){
   document.head.appendChild(st);
 }
 
+// ===== Toasts con undo =====
+function injectToastStyles(){
+  if (document.getElementById('toast-styles')) return;
+  const css = `
+  .toast-host{position:fixed;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
+  .toast-host.br{right:12px;bottom:12px;align-items:flex-end}
+  .toast-host.bl{left:12px;bottom:12px;align-items:flex-start}
+  .toast{
+    pointer-events:auto;background:var(--panel,#12182c);color:var(--text,#e6ecff);
+    border:1px solid var(--border,rgba(255,255,255,.12));box-shadow:0 6px 20px rgba(0,0,0,.3);
+    border-radius:.75rem;padding:.6rem .75rem;display:flex;gap:.75rem;align-items:center;
+    max-width:min(480px,92vw);transform:translateY(8px);opacity:0;transition:transform .2s ease,opacity .2s ease
+  }
+  .toast.show{transform:translateY(0);opacity:1}
+  .toast.leaving{transform:translateY(8px);opacity:0}
+  .toast .msg{flex:1}
+  .toast .btn-undo{
+    background:transparent;border:0;font-weight:700;text-decoration:underline;cursor:pointer;
+    color:var(--primary,#0ea5e9);padding:.2rem .3rem;border-radius:.4rem
+  }
+  .toast .btn-undo:focus{outline:2px solid var(--primary,#0ea5e9);outline-offset:2px}
+  .toast .btn-close{background:transparent;border:0;cursor:pointer;color:inherit;opacity:.8;padding:.2rem;border-radius:.4rem}
+  `;
+  const st = document.createElement('style');
+  st.id = 'toast-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+let _toastHost = null;
+function ensureToastHost(){
+  if (_toastHost) return _toastHost;
+  _toastHost = document.createElement('div');
+  _toastHost.id = 'toastHost';
+  _toastHost.className = 'toast-host br';
+  document.body.appendChild(_toastHost);
+  return _toastHost;
+}
+function pickToastCorner(){
+  // Si el FAB está abierto, usa abajo-izquierda para no taparlo
+  return document.body.classList.contains('fab-open') ? 'bl' : 'br';
+}
+function positionToastHost(){
+  const host = ensureToastHost();
+  host.classList.remove('br','bl');
+  host.classList.add(pickToastCorner());
+}
+window.addEventListener('resize', positionToastHost);
+document.addEventListener('click', positionToastHost);
+
+function showToast(text, { actionLabel = 'Deshacer', onUndo = null, duration = 6000 } = {}){
+  injectToastStyles();
+  const host = ensureToastHost();
+  positionToastHost();
+
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role','status');
+  el.setAttribute('aria-live','polite');
+
+  el.innerHTML = `
+    <span class="msg"></span>
+    ${onUndo ? `<button class="btn-undo" type="button">${actionLabel}</button>` : ''}
+    <button class="btn-close" type="button" aria-label="Cerrar">✕</button>
+  `;
+  el.querySelector('.msg').textContent = text;
+
+  host.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+
+  let t = setTimeout(close, duration);
+  el.addEventListener('mouseenter', () => { clearTimeout(t); });
+  el.addEventListener('mouseleave', () => { t = setTimeout(close, duration); });
+
+  function close(){
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 220);
+  }
+  el.querySelector('.btn-close').addEventListener('click', close);
+  if (onUndo){
+    el.querySelector('.btn-undo').addEventListener('click', async () => {
+      try { await onUndo(); } finally { close(); }
+    });
+  }
+}
+
+function reRender(){
+  (state.viewMode === 'month')
+    ? renderCalendar(state.currentMonth)
+    : renderTimeView(state.viewMode, state.selectedDate || new Date());
+}
+
 function animateMonth(dir, rerender){
   const grid = $('#calendarGrid');
   if (!grid) return rerender();
@@ -888,6 +1196,35 @@ on('#themeToggle','click', toggleTheme);
 
 // Vista (radios)
 $$('input[name="viewMode"]').forEach(r=> on(r,'change', e => setViewMode(e.target.value)));
+
+on('#updateNowBtn','click', async ()=>{
+  const btn = qs('#updateNowBtn');
+  btn.classList.add('loading');
+  try{
+    // 1) intenta actualizar el Service Worker
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg){
+      await reg.update();
+      // ¿nuevo SW esperando?
+      if (reg.waiting){
+        reg.waiting.postMessage({ type:'SKIP_WAITING' });
+      } else if (reg.installing){
+        await new Promise(resolve => reg.installing.addEventListener('statechange', e=>{
+          if (e.target.state === 'installed') resolve();
+        }));
+      }
+    }
+
+    // 2) limpia caches y recarga con "cache-bust"
+    if ('caches' in window){
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  }catch(e){ console.warn(e); }
+  // 3) recarga dura
+  const base = location.href.split('#')[0].split('?')[0];
+  location.replace(base + '?u=' + Date.now());
+});
 
 // Botón marcar/desmarcar todos
 on('#toggleAllCats','click', ()=>{
@@ -1026,7 +1363,18 @@ on('#cancelEventBtn','click', closeSheet);
 on('#eventForm','submit', saveEvent);
 on('#deleteEventBtn','click', async ()=>{
   const id = $('#eventId')?.value; if (!id) return;
-  if (confirm('¿Eliminar este evento?')) await deleteEvent(id);
+
+  const ok = await confirmNative({
+    title: 'Eliminar evento',
+    message: 'Se eliminará el evento y todos sus archivos adjuntos. ¿Seguro que quieres continuar?',
+    confirmText: 'Eliminar',
+    cancelText: 'Cancelar',
+    destructive: true
+  });
+
+  if (ok) {
+    await deleteEvent(id);        // tu deleteEvent ya muestra toast con Deshacer
+  }
 });
 
 // Sheets nuevos: Cumpleaños
@@ -1108,10 +1456,19 @@ function addSwipeNavigation(){
 
 function swipePrev(){
   switch (state.viewMode) {
-    case 'month':
-      state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
-      renderCalendar(state.currentMonth);
+    case 'month': {
+      const nextDate = new Date(
+        state.currentMonth.getFullYear(),
+        state.currentMonth.getMonth() - 1,
+        1
+      );
+      // mismo slide que con el botón «Mes anterior»
+      animateMonth('prev', () => {
+        state.currentMonth = nextDate;
+        renderCalendar(state.currentMonth);
+      });
       break;
+    }
     case 'week':
       state.selectedDate = shiftDate(state.selectedDate || new Date(), -7);
       renderTimeView('week', state.selectedDate);
@@ -1130,10 +1487,19 @@ function swipePrev(){
 
 function swipeNext(){
   switch (state.viewMode) {
-    case 'month':
-      state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 1);
-      renderCalendar(state.currentMonth);
+    case 'month': {
+      const nextDate = new Date(
+        state.currentMonth.getFullYear(),
+        state.currentMonth.getMonth() + 1,
+        1
+      );
+      // mismo slide que con el botón «Mes siguiente»
+      animateMonth('next', () => {
+        state.currentMonth = nextDate;
+        renderCalendar(state.currentMonth);
+      });
       break;
+    }
     case 'week':
       state.selectedDate = shiftDate(state.selectedDate || new Date(), +7);
       renderTimeView('week', state.selectedDate);
@@ -1149,6 +1515,7 @@ function swipeNext(){
       break;
   }
 }
+
 
 function shiftDate(baseDate, days){
   const d = new Date(baseDate || new Date());
@@ -1564,14 +1931,17 @@ function applyTheme(theme) {
   applyTheme._tmr = setTimeout(() => html.classList.remove('theme-anim'), 420);
 }
 
-try {
-  if (navigator.storage?.persist) {
-    await navigator.storage.persist();
-  }
-} catch {}
+(async () => {
+  try {
+    if (navigator.storage?.persist) {
+      await navigator.storage.persist();
+    }
+  } catch {}
+})();
 
 (async function init(){
   injectEnhancementStyles();
+  injectToastStyles();
   applyTheme(state.theme);
   try { updateCornerBrand(); } catch (_) {}
 
@@ -1597,4 +1967,31 @@ try {
 
   if (action === 'new') openSheetNew();
   injectGoogleImportUI();
+  await checkForcedUpdate();                          // al cargar
+document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña
+  if (document.visibilityState === 'visible') checkForcedUpdate();
+});
+setInterval(checkForcedUpdate, 6 * 60 * 60 * 1000); // cada 6h
 })();
+async function checkForcedUpdate(){
+  const localVer = window.__APP_VERSION__;
+  const persistedMin = localStorage.getItem('forceUpdate.min');
+  if (persistedMin && cmpSemver(localVer, persistedMin) < 0){
+    showUpdateGate(persistedMin, persistedMin);
+    return;
+  }
+
+  try{
+    const res = await fetch(VERSION_ENDPOINT + '?t=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) throw new Error('version fetch failed');
+    const data = await res.json();
+    const minReq = data.min || data.latest || localVer;
+    if (cmpSemver(localVer, minReq) < 0){
+      showUpdateGate(minReq, data.latest || minReq, data.notes || '');
+    } else {
+      hideUpdateGate(); // por si venías bloqueado y ya actualizaste
+    }
+  }catch{
+    // si no hay red y ya estaba forzado, seguirá bloqueado por persistedMin
+  }
+}
