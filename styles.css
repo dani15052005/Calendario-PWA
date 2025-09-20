@@ -849,3 +849,5 @@ dialog.confirm-modal::backdrop {
 .confirm-actions .btn:hover { background: rgba(255,255,255,.05); }
 .confirm-actions .btn.primary { background: var(--primary); color:#fff; border-color: transparent; }
 .confirm-actions .btn.danger  { background: #ef4444; color:#fff; border-color: transparent; }
+
+.pill.all-day { min-height: 28px; }

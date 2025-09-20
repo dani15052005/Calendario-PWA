@@ -477,6 +477,31 @@ function formatRangeTitle(days) {
   return `${first.getDate()} ${MONTHS[first.getMonth()]} ${first.getFullYear()} – ${last.getDate()} ${MONTHS[last.getMonth()]} ${last.getFullYear()}`;
 }
 
+function addHolidayStubsToMap(days, map){
+  for (const d of days){
+    const ds   = ymd(d);
+    const name = getNationalHolidaysMap(d.getFullYear()).get(ds);
+    if (!name) continue;
+    const arr = map.get(ds) || [];
+    // evita duplicar si ya lo añadimos
+    if (!arr.some(e => e.id === `holiday:${ds}`)){
+      arr.push({
+        id: `holiday:${ds}`,
+        date: ds,
+        time: '00:00',              // se colocará arriba
+        title: `🎉 ${name}`,
+        location: '',
+        client: '',
+        category: 'Festivo',
+        categoryOther: '',
+        monthKey: ds.slice(0,7),
+        createdAt: 0
+      });
+      map.set(ds, arr);
+    }
+  }
+}
+
 async function renderTimeView(mode, anchor) {
   const days = rangeDays(mode, anchor);
   $('#timeRangeTitle') && ($('#timeRangeTitle').textContent = formatRangeTitle(days));
@@ -493,6 +518,7 @@ async function renderTimeView(mode, anchor) {
   });
 
   const allByDate = await getEventsByDates(days.map(ymd));
+  addHolidayStubsToMap(days, allByDate);
   const hasAny = days.some(d => (allByDate.get(ymd(d))||[]).some(e => state.filters.has(e.category)));
 
   if (mode === 'day') $('#dayEmptyMsg')?.classList.toggle('hidden', hasAny);
@@ -539,6 +565,13 @@ async function renderTimeView(mode, anchor) {
       pill.querySelector('.pill-time').textContent = evt.time;
       const title = evt.category === 'Otros' && evt.categoryOther ? `${evt.title} · ${evt.categoryOther}` : evt.title;
       pill.querySelector('.pill-title').textContent = title;
+// Ocultar la hora y “pegar” arriba si es festivo
+if (evt.category === 'Festivo') {
+  const timeEl = pill.querySelector('.pill-time');
+  if (timeEl) timeEl.textContent = '';
+  pill.classList.add('all-day');
+  pill.style.top = '0px';
+}
       pill.title = [
         evt.title,
         evt.location ? `· ${evt.location}` : '',
