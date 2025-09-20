@@ -29,12 +29,18 @@ function qs(el){ return document.querySelector(el); }
 function showUpdateGate(minReq, latest, notes){
   document.body.classList.add('update-block');
   const gate = qs('#updateGate');
+
+  // 👉 si #updateGate NO está colgado directamente del <body>, muévelo
+  if (gate && gate.parentNode !== document.body) {
+    document.body.appendChild(gate);
+  }
+
   qs('#currentVer').textContent  = `Actual: ${window.__APP_VERSION__}`;
   qs('#requiredVer').textContent = `Requerida: ${minReq}`;
 
   const link = qs('#releaseNotesLink');
   if (link) {
-    if (notes && /^https?:\/\//.test(notes)) {  // solo si es URL
+    if (notes && /^https?:\/\//.test(notes)) {
       link.href = notes;
       link.style.display = 'block';
       link.setAttribute('target','_blank');
@@ -45,7 +51,7 @@ function showUpdateGate(minReq, latest, notes){
     }
   }
 
-  gate.setAttribute('aria-hidden','false');  // <-- añade esto
+  gate.setAttribute('aria-hidden','false');
   gate.classList.remove('hidden');
   localStorage.setItem('forceUpdate.min', minReq);
 }
@@ -1648,9 +1654,8 @@ function ensureGoogleToken() {
           reject(new Error(err));
         },
         error_callback: (err) => {
-          // Aquí suele aparecer origin_mismatch, invalid_request, etc.
-          console.error('GIS error_callback:', err, 'origin:', location.origin);
-          alert('Google OAuth error: ' + (err.error || 'desconocido') + '\nOrigen: ' + location.origin);
+  console.error('GIS error_callback:', err, 'origin:', location.origin);
+  alert('Google OAuth error:\n' + JSON.stringify(err, null, 2) + '\nOrigen: ' + location.origin);
           reject(err);
         }
       });

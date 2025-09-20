@@ -896,3 +896,22 @@ html[data-theme="light"] .update-gate .ug-card{
 
 /* evita hacer scroll detrás del overlay */
 body.update-block{ overflow: hidden; }
+
+/* asegúrate de tener esto */
+.hidden { display: none !important; }
+
+/* overlay del gate SIEMPRE encima */
+#updateGate {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;       /* más alto que todo */
+  display: flex;         /* centra tu contenido interno */
+  align-items: center;
+  justify-content: center;
+}
+
+/* cuando esté “oculto” */
+#updateGate.hidden { display: none !important; }
+
+/* opcional: bloquear scroll cuando hay gate */
+body.update-block { overflow: hidden; }
