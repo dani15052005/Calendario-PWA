@@ -1,5 +1,5 @@
 // === sw.js (v1.0.11) – modo dev: network-first para .js/.css, rutas relativas en precache ===
-const VERSION = 'v1.0.33';
+const VERSION = 'v1.0.36';
 const STATIC_CACHE = `static-${VERSION}`;
 const STATIC_ASSETS = [
   './', './index.html', './styles.css', './script.js',
@@ -16,7 +16,10 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(() => {
+        if (IS_DEV_HOST) self.skipWaiting(); // SOLO en localhost
+        // En producción NO hacemos skipWaiting aquí, para poder avisar
+      })
   );
 });
 

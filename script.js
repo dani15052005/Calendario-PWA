@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.1';   // <-- cambia en cada despliegue
+window.__APP_VERSION__ = '1.0.4';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -29,13 +29,12 @@ function qs(el){ return document.querySelector(el); }
 function showUpdateGate(minReq, latest, notes){
   document.body.classList.add('update-block');
   const gate = qs('#updateGate');
-
   qs('#currentVer').textContent  = `Actual: ${window.__APP_VERSION__}`;
   qs('#requiredVer').textContent = `Requerida: ${minReq}`;
 
   const link = qs('#releaseNotesLink');
   if (link) {
-    if (notes && typeof notes === 'string') {
+    if (notes && /^https?:\/\//.test(notes)) {  // solo si es URL
       link.href = notes;
       link.style.display = 'block';
       link.setAttribute('target','_blank');
@@ -46,16 +45,20 @@ function showUpdateGate(minReq, latest, notes){
     }
   }
 
+  gate.setAttribute('aria-hidden','false');  // <-- añade esto
   gate.classList.remove('hidden');
   localStorage.setItem('forceUpdate.min', minReq);
 }
 
-
 function hideUpdateGate(){
   document.body.classList.remove('update-block');
-  qs('#updateGate')?.classList.add('hidden');
+  const gate = qs('#updateGate');
+  if (!gate) return;
+  gate.classList.add('hidden');
+  gate.setAttribute('aria-hidden','true');   // <-- y esto
   localStorage.removeItem('forceUpdate.min');
 }
+
 
 const on = (selOrEl, evt, handler, opts) => {
   const el = typeof selOrEl === 'string' ? $(selOrEl) : selOrEl;
@@ -1233,31 +1236,30 @@ $$('input[name="viewMode"]').forEach(r=> on(r,'change', e => setViewMode(e.targe
 on('#updateNowBtn','click', async ()=>{
   const btn = qs('#updateNowBtn');
   btn.classList.add('loading');
+
   try{
-    // 1) intenta actualizar el Service Worker
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg){
       await reg.update();
-      // ¿nuevo SW esperando?
-      if (reg.waiting){
-        reg.waiting.postMessage({ type:'SKIP_WAITING' });
-      } else if (reg.installing){
-        await new Promise(resolve => reg.installing.addEventListener('statechange', e=>{
-          if (e.target.state === 'installed') resolve();
+      if (reg.waiting){ reg.waiting.postMessage({ type:'SKIP_WAITING' }); }
+      else if (reg.installing){
+        await new Promise(r => reg.installing.addEventListener('statechange', e=>{
+          if (e.target.state === 'installed') r();
         }));
       }
     }
-
-    // 2) limpia caches y recarga con "cache-bust"
     if ('caches' in window){
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
   }catch(e){ console.warn(e); }
-  // 3) recarga dura
+
+  localStorage.removeItem('forceUpdate.min'); // <- evita bucle del cartel
+
   const base = location.href.split('#')[0].split('?')[0];
   location.replace(base + '?u=' + Date.now());
 });
+
 
 // Botón marcar/desmarcar todos
 on('#toggleAllCats','click', ()=>{
@@ -1309,6 +1311,13 @@ on('#jumpBtn','click',   ()=>{
 
 // Vistas de tiempo
 on('#backToMonth','click', ()=> setViewMode('month') );
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // El SW nuevo toma control → recargamos para que sirva assets nuevos
+    location.reload();
+  });
+}
 
 // ===== FAB & Speed-dial =====
 function setFabOpen(open){
@@ -1592,7 +1601,7 @@ document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState
    - Crear un OAuth 2.0 Client ID (tipo Web) y añadir tu origen HTTPS a "Authorized JavaScript origins".
    - Sustituir GOOGLE_CLIENT_ID por el tuyo.
 */
-const GOOGLE_CLIENT_ID = 'TU_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '873672608509-dgmd92v2k8fdesd7n5vkg46p2cq8eug4.apps.googleusercontent.com';
 
 // Scopes mínimos: leer eventos + leer ficheros adjuntos de Drive
 const GOOGLE_SCOPES = [
@@ -1933,6 +1942,34 @@ async function saveAttachmentBlob(eventId, name, mime, blob, fileId){
   return !existed;
 }
 
+function ensureSWUpdatePrompt() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistration().then((reg) => {
+    if (!reg) return;
+
+    const showIfInstalled = (sw) => {
+      if (!sw) return;
+      const onState = () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          showToast('Actualización disponible', {
+            actionLabel: 'Actualizar',
+            onUndo: async () => { reg.waiting?.postMessage({ type:'SKIP_WAITING' }); },
+            duration: 15000
+          });
+        }
+      };
+      // si ya está en installed disparamos, si no, esperamos
+      if (sw.state === 'installed') onState();
+      sw.addEventListener('statechange', onState);
+    };
+
+    if (reg.waiting) showIfInstalled(reg.waiting);
+    if (reg.installing) showIfInstalled(reg.installing);
+
+    reg.addEventListener('updatefound', () => showIfInstalled(reg.installing));
+  });
+}
+
 /* ---------- (Opcional) Importar de todos tus calendarios, no solo "primary" ----------
    Llama a listCalendars() y recorre. Lo dejamos preparado por si lo quieres usar luego.
 */
@@ -2000,12 +2037,14 @@ function applyTheme(theme) {
 
   if (action === 'new') openSheetNew();
   injectGoogleImportUI();
+  ensureSWUpdatePrompt();
   await checkForcedUpdate();                          // al cargar
 document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña
   if (document.visibilityState === 'visible') checkForcedUpdate();
 });
 setInterval(checkForcedUpdate, 6 * 60 * 60 * 1000); // cada 6h
 })();
+
 async function checkForcedUpdate(){
   const localVer = window.__APP_VERSION__;
   const persistedMin = localStorage.getItem('forceUpdate.min');
@@ -2019,10 +2058,31 @@ async function checkForcedUpdate(){
     if (!res.ok) throw new Error('version fetch failed');
     const data = await res.json();
     const minReq = data.min || data.latest || localVer;
+
+    // Gate obligatorio si estás por debajo de min
     if (cmpSemver(localVer, minReq) < 0){
       showUpdateGate(minReq, data.latest || minReq, data.notes || '');
+      return;
     } else {
-      hideUpdateGate(); // por si venías bloqueado y ya actualizaste
+      hideUpdateGate();
+    }
+
+    // --- AVISO SUAVE si existe una latest superior, sin bloquear ---
+    if (data.latest && cmpSemver(localVer, data.latest) < 0) {
+      showToast(`Nueva versión ${data.latest} disponible`, {
+        actionLabel: 'Actualizar',
+        onUndo: async () => {
+          const reg = await navigator.serviceWorker?.getRegistration();
+          await reg?.update();
+          reg?.waiting?.postMessage({ type:'SKIP_WAITING' });
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+          location.replace(location.pathname + '?u=' + Date.now());
+        },
+        duration: 15000
+      });
     }
   }catch{
     // si no hay red y ya estaba forzado, seguirá bloqueado por persistedMin

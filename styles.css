@@ -851,3 +851,48 @@ dialog.confirm-modal::backdrop {
 .confirm-actions .btn.danger  { background: #ef4444; color:#fff; border-color: transparent; }
 
 .pill.all-day { min-height: 28px; }
+
+/* === Update Gate (overlay) === */
+.update-gate{
+  position: fixed;
+  inset: 0;
+  z-index: 10050;          /* por encima de topbar, drawer, sheet y toasts */
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+.update-gate.hidden,
+.update-gate[aria-hidden="true"]{ display: none; }
+
+.update-gate .ug-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(3px);
+  z-index: 0;
+}
+
+.update-gate .ug-card{
+  position: relative;
+  z-index: 1;
+  width: min(520px, 92vw);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06);
+}
+html[data-theme="light"] .update-gate .ug-card{
+  border-color: rgba(17,24,39,.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,.15), 0 0 0 1px rgba(17,24,39,.06);
+}
+
+/* botón con spinner opcional */
+.ug-btn .spinner{ display:none; width:16px; height:16px; border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff; border-radius:50%; margin-right:.5rem; vertical-align:-3px; }
+.ug-btn.loading .spinner{ display:inline-block; animation: ugspin .8s linear infinite; }
+@keyframes ugspin{ to { transform: rotate(1turn); } }
+
+/* evita hacer scroll detrás del overlay */
+body.update-block{ overflow: hidden; }
