@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.8';
+window.__APP_VERSION__ = '1.0.9';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {

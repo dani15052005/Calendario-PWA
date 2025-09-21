@@ -1043,3 +1043,82 @@ select option:disabled{
   color:#475569;
 }
 .drawer-footer .muted{ opacity:.85; margin-right:.4rem; }
+
+/* ===================== Add Event — diseño móvil ===================== */
+@media (max-width: 600px){
+  /* Que el sheet llene el ancho y quede pegado abajo en móvil */
+  #addEventSheet{
+    width: 100vw;
+    max-width: none;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+  }
+  /* Si tu sheet tiene contenedores internos, cubrimos variantes comunes */
+  #addEventSheet .sheet, 
+  #addEventSheet .sheet-card,
+  #addEventSheet .panel {
+    width: 100vw;
+    max-width: none;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* Tipografía cómoda en inputs para evitar el “auto-zoom” de iOS */
+  #addEventSheet input,
+  #addEventSheet select,
+  #addEventSheet textarea,
+  #addEventSheet button{
+    font-size: 16px;          /* <= clave en iOS */
+    line-height: 1.2;
+  }
+
+  /* Altura mínima de controles y chips fecha/hora */
+  #addEventSheet input[type="date"],
+  #addEventSheet input[type="time"],
+  #addEventSheet select{
+    min-height: 46px;
+  }
+
+  /* Reducir huecos verticales */
+  #addEventSheet .row,
+  #addEventSheet .field{
+    margin-bottom: 10px;
+  }
+  #addEventSheet label{
+    font-size: .95rem;
+    margin-bottom: .35rem;
+  }
+
+  /* Contenedor de fecha/hora de inicio/fin en grid compacto */
+  #rowDateTime{
+    display: grid;
+    grid-template-columns: 1fr min-content 1fr; /* inicio | → | fin */
+    gap: 10px;
+    align-items: center;
+  }
+  /* Cuando está activado "Todo el día", solo una columna */
+  #rowDateTime.all-day{
+    grid-template-columns: 1fr;
+  }
+  /* En pantallas muy estrechas, apilar y ocultar la flecha */
+  @media (max-width: 360px){
+    #rowDateTime{
+      grid-template-columns: 1fr;
+    }
+    #rowDateTime .arrow{
+      display: none;
+    }
+  }
+
+  /* Padding más contenido + área segura iOS */
+  #addEventSheet .sheet-body,
+  #addEventSheet .content{
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  /* Botonera inferior más junta y con área segura */
+  #addEventSheet .actions{
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+}
