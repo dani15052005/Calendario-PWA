@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.4';
+window.__APP_VERSION__ = '1.0.8';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -56,6 +56,24 @@ function showUpdateGate(minReq, latest, notes){
   localStorage.setItem('forceUpdate.min', minReq);
 }
 
+function addMinutes(dateStr, timeStr, minutes){
+  const dt = new Date(`${dateStr}T${timeStr || '00:00'}`);
+  dt.setMinutes(dt.getMinutes() + (minutes||0));
+  return {
+    date: ymd(dt),
+    time: `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
+  };
+}
+function setAllDayUI(isAllDay){
+  const row = document.getElementById('rowDateTime');
+  if (!row) return;
+  row.classList.toggle('all-day', !!isAllDay);
+  const st = document.getElementById('eventStartTime');
+  const et = document.getElementById('eventEndTime');
+  if (st) st.disabled = !!isAllDay;
+  if (et) et.disabled = !!isAllDay;
+}
+
 function hideUpdateGate(){
   document.body.classList.remove('update-block');
   const gate = qs('#updateGate');
@@ -83,6 +101,11 @@ const DAY_START_H = 7;
 const DAY_END_H   = 18;
 const PX_PER_HOUR = 60;
 const PX_PER_MIN  = PX_PER_HOUR / 60;
+
+function injectDrawerVersion(){
+  const el = document.getElementById('appVersionLabel');
+  if (el) el.textContent = 'v' + (window.__APP_VERSION__ || '0.0.0');
+}
 
 // ===== Snapshot & Restore de eventos + adjuntos =====
 async function snapshotEventAndAttachments(eventId){
@@ -215,7 +238,7 @@ const state = {
 // ===================== IndexedDB =====================
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('calendarDB', 2);
+    const req = indexedDB.open('calendarDB', 3);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       let events;
@@ -410,24 +433,32 @@ function renderCalendar(date = state.currentMonth) {
     grid.append(cell);
   }
 
-  // 2) Hidratar eventos cuando IndexedDB responda (si este render sigue vigente)
-  loadMonthEvents(year, month).then((eventsByDayAll) => {
-    if (myToken !== monthRenderToken) return;
-    for (const [dateStr, list] of eventsByDayAll) {
-      const box = tagRefs.get(dateStr);
-      if (!box) continue;
-      const dayEvts = list.filter(e => state.filters.has(e.category))
-                          .slice()
-                          .sort((a,b)=> a.time.localeCompare(b.time));
-      for (const e of dayEvts) {
-        const tag = document.createElement('span');
-        tag.className = `event-tag cat-${e.category}`;
-        tag.title = `${e.time} · ${e.title}`;
-        tag.textContent = `${e.time} ${e.title}`;
-        box.append(tag);
-      }
+ // 2) Hidratar eventos cuando IndexedDB responda (si este render sigue vigente)
+loadMonthEvents(year, month).then((eventsByDayAll) => {
+  if (myToken !== monthRenderToken) return;
+
+  for (const [dateStr, list] of eventsByDayAll) {
+    const box = tagRefs.get(dateStr);
+    if (!box) continue;
+
+    const dayEvts = list
+      .filter(ev => state.filters.has(ev.category))
+      .slice()
+      .sort((a, b) => a.time.localeCompare(b.time));
+
+    for (const evt of dayEvts) {
+      const tag = document.createElement('span');
+      tag.className = `event-tag cat-${evt.category}`;
+      tag.title = `${evt.time} · ${evt.title}`;
+
+      // ⬇ aquí va el cambio de 3.7, PERO DENTRO del bucle
+      const timeLabel = evt.allDay ? '' : (evt.time || '');
+      tag.textContent = `${timeLabel ? timeLabel + ' ' : ''}${evt.title}`;
+
+      box.append(tag);
     }
-  });
+  }
+});
 }
 
 async function loadMonthEvents(year, month) {
@@ -570,17 +601,24 @@ async function renderTimeView(mode, anchor) {
       const pill = tpl.content.firstElementChild.cloneNode(true);
 
       pill.style.top = `${top}px`;
-      pill.classList.add(`cat-${evt.category}`);
-      pill.querySelector('.pill-time').textContent = evt.time;
-      const title = evt.category === 'Otros' && evt.categoryOther ? `${evt.title} · ${evt.categoryOther}` : evt.title;
-      pill.querySelector('.pill-title').textContent = title;
-// Ocultar la hora y “pegar” arriba si es festivo
-if (evt.category === 'Festivo') {
-  const timeEl = pill.querySelector('.pill-time');
-  if (timeEl) timeEl.textContent = '';
+pill.classList.add(`cat-${evt.category}`);
+
+const title = (evt.category === 'Otros' && evt.categoryOther)
+  ? `${evt.title} · ${evt.categoryOther}`
+  : evt.title;
+pill.querySelector('.pill-title').textContent = title;
+
+// Hora mostrada: rango start–end; si es "todo el día" o festivo, sin hora y pegado arriba
+let timeText = '';
+if (evt.allDay || evt.category === 'Festivo') {
   pill.classList.add('all-day');
   pill.style.top = '0px';
+  timeText = '';
+} else {
+  timeText = evt.endTime ? `${evt.time}–${evt.endTime}` : (evt.time || '');
 }
+pill.querySelector('.pill-time').textContent = timeText;
+
       pill.title = [
         evt.title,
         evt.location ? `· ${evt.location}` : '',
@@ -640,29 +678,56 @@ async function saveEvent(ev) {
   const idInput = $('#eventId');
   const id = idInput?.value || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
 
-  const dateStr = $('#eventDate')?.value;
-  const time = $('#eventTime')?.value;
   const title = $('#eventTitle')?.value?.trim();
   const location = $('#eventLocation')?.value?.trim() || '';
-  const client = $('#eventClient')?.value?.trim() || '';
-  const category = $('#eventCategory')?.value;
+  const category = $('#eventCategory')?.value || 'Trabajo';
   const categoryOther = (category === 'Otros') ? ($('#eventCategoryOther')?.value?.trim() || '') : '';
   const files = $('#eventFiles')?.files;
 
-  if (!dateStr || !time || !title || !category) return;
+  const allDay = !!$('#eventAllDay')?.checked;
+  const sDate = $('#eventStartDate')?.value;
+  let   sTime = $('#eventStartTime')?.value;
+  let   eDate = $('#eventEndDate')?.value;
+  let   eTime = $('#eventEndTime')?.value;
+
+  const alertSel = $('#eventAlert')?.value || 'none';
+  const repeatSel = $('#eventRepeat')?.value || 'none';
+  const notes = $('#eventNotes')?.value?.trim() || '';
+
+  if (!title || !sDate || (!allDay && !sTime)) return;
+
+  if (allDay) {
+    sTime = '00:00';
+    eDate = eDate || sDate;
+    eTime = '23:59';
+  } else {
+    eDate = eDate || sDate;
+    if (!eTime) {
+      const plus = addMinutes(sDate, sTime, 60); // +1h por defecto
+      eDate = plus.date; eTime = plus.time;
+    }
+  }
 
   const isEdit = !!idInput?.value;
   let snapshot = null;
-  if (isEdit) {
-    // guarda estado anterior para poder deshacer edición (incluye adjuntos)
-    snapshot = await snapshotEventAndAttachments(id);
-  }
+  if (isEdit) snapshot = await snapshotEventAndAttachments(id);
 
   const evt = {
-    id, date: dateStr, time, title, location, client,
+    id,
+    title, location,
     category, categoryOther,
-    monthKey: dateStr.slice(0,7),
-    createdAt: snapshot?.event?.createdAt || Date.now()
+    // compat con vistas existentes:
+    date: sDate,
+    time: sTime,
+    monthKey: sDate.slice(0,7),
+    createdAt: snapshot?.event?.createdAt || Date.now(),
+    // nuevos campos:
+    allDay,
+    startDate: sDate, startTime: sTime,
+    endDate: eDate,   endTime: eTime,
+    alert: alertSel,
+    repeat: repeatSel,
+    notes
   };
 
   await tx(['events', 'attachments'], 'readwrite', (eventsStore, attStore) => {
@@ -682,10 +747,8 @@ async function saveEvent(ev) {
     actionLabel: 'Deshacer',
     onUndo: async () => {
       if (isEdit && snapshot?.event) {
-        // revertir por completo la edición (datos y adjuntos)
         await restoreEventAndAttachments(snapshot.event, snapshot.atts);
       } else {
-        // si fue creación nueva, deshacer = eliminar
         await deleteEvent(id, { silent: true });
       }
       reRender();
@@ -818,35 +881,85 @@ function detachOutsideCloseForSheet(sheetEl){
 
 function openSheetNew() {
   const baseDate = state.selectedDate || new Date();
+  const base = ymd(baseDate);
+  const startTime = '10:00';
+  const plus = addMinutes(base, startTime, 60);
+
   $('#sheetTitle') && ($('#sheetTitle').textContent = 'Añadir evento');
   $('#deleteEventBtn')?.classList.add('hidden');
-  $('#eventId') && ($('#eventId').value = '');
-  $('#eventDate') && ($('#eventDate').value = ymd(baseDate));
-  $('#eventTime') && ($('#eventTime').value = '10:00');
-  $('#eventTitle') && ($('#eventTitle').value = '');
-  $('#eventLocation') && ($('#eventLocation').value = '');
-  $('#eventClient') && ($('#eventClient').value = '');
+
+  const idEl = $('#eventId');      if (idEl) idEl.value = '';
+  const ttlEl = $('#eventTitle');  if (ttlEl) ttlEl.value = '';
+
+  // Todo el día OFF por defecto
+  const allDayEl = $('#eventAllDay'); if (allDayEl) allDayEl.checked = false;
+  setAllDayUI(false);
+
+  $('#eventStartDate')?.setAttribute('value', base);
+  $('#eventStartDate').value = base;
+  $('#eventStartTime')?.setAttribute('value', startTime);
+  $('#eventStartTime').value = startTime;
+
+  $('#eventEndDate')?.setAttribute('value', plus.date);
+  $('#eventEndDate').value = plus.date;
+  $('#eventEndTime')?.setAttribute('value', plus.time);
+  $('#eventEndTime').value = plus.time;
+
+  $('#eventLocation')?.setAttribute('value', '');
+  $('#eventLocation').value = '';
+
+  $('#eventAlert') && ($('#eventAlert').value = 'none');
+  $('#eventRepeat') && ($('#eventRepeat').value = 'none');
+  $('#eventNotes') && ($('#eventNotes').value = '');
+
   $('#eventCategory') && ($('#eventCategory').value = 'Trabajo');
   $('#categoryOtherWrap')?.classList.add('hidden');
   $('#eventCategoryOther') && ($('#eventCategoryOther').value = '');
+
   $('#eventFiles') && ($('#eventFiles').value = '');
   $('#attachmentsPreview') && ($('#attachmentsPreview').innerHTML = '');
+
   openSheet();
 }
 
 async function openSheetForEdit(evt) {
   state.selectedDate = parseDateInput(evt.date);
+
   $('#sheetTitle') && ($('#sheetTitle').textContent = 'Editar evento');
   $('#deleteEventBtn')?.classList.remove('hidden');
+
   $('#eventId') && ($('#eventId').value = evt.id);
-  $('#eventDate') && ($('#eventDate').value = evt.date);
-  $('#eventTime') && ($('#eventTime').value = evt.time);
-  $('#eventTitle') && ($('#eventTitle').value = evt.title);
+  $('#eventTitle') && ($('#eventTitle').value = evt.title || '');
+
+  const allDay = !!evt.allDay;
+  const sDate = evt.startDate || evt.date;
+  const sTime = allDay ? '00:00' : (evt.startTime || evt.time || '10:00');
+  const eDate = evt.endDate || sDate;
+  const eTime = allDay ? '23:59' : (evt.endTime || '');
+
+  const allDayEl = $('#eventAllDay'); if (allDayEl) allDayEl.checked = allDay;
+  setAllDayUI(allDay);
+
+  $('#eventStartDate') && ($('#eventStartDate').value = sDate);
+  $('#eventStartTime') && ($('#eventStartTime').value = sTime);
+  $('#eventEndDate')   && ($('#eventEndDate').value   = eDate);
+  $('#eventEndTime')   && ($('#eventEndTime').value   = eTime);
+
   $('#eventLocation') && ($('#eventLocation').value = evt.location || '');
-  $('#eventClient') && ($('#eventClient').value = evt.client || '');
+
+  $('#eventAlert') && ($('#eventAlert').value = evt.alert || 'none');
+  $('#eventRepeat') && ($('#eventRepeat').value = evt.repeat || 'none');
+  $('#eventNotes') && ($('#eventNotes').value = evt.notes || '');
+
   $('#eventCategory') && ($('#eventCategory').value = evt.category || 'Trabajo');
-  if (evt.category === 'Otros') { $('#categoryOtherWrap')?.classList.remove('hidden'); $('#eventCategoryOther') && ($('#eventCategoryOther').value = evt.categoryOther || ''); }
-  else { $('#categoryOtherWrap')?.classList.add('hidden'); $('#eventCategoryOther') && ($('#eventCategoryOther').value = ''); }
+  if (evt.category === 'Otros') {
+    $('#categoryOtherWrap')?.classList.remove('hidden');
+    $('#eventCategoryOther') && ($('#eventCategoryOther').value = evt.categoryOther || '');
+  } else {
+    $('#categoryOtherWrap')?.classList.add('hidden');
+    $('#eventCategoryOther') && ($('#eventCategoryOther').value = '');
+  }
+
   $('#eventFiles') && ($('#eventFiles').value = '');
   await renderAttachmentPreview(evt.id);
   openSheet();
@@ -1320,8 +1433,9 @@ on('#backToMonth','click', ()=> setViewMode('month') );
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // El SW nuevo toma control → recargamos para que sirva assets nuevos
-    location.reload();
+    // Cuando el SW nuevo toma el control, limpiamos el flag y recargamos con bust
+    try { localStorage.removeItem('forceUpdate.min'); } catch {}
+    location.replace(location.pathname + '?u=' + Date.now());
   });
 }
 
@@ -1409,6 +1523,7 @@ on('#fabTask','click', ()=>{
 on('#closeSheet','click', closeSheet);
 on('#cancelEventBtn','click', closeSheet);
 on('#eventForm','submit', saveEvent);
+
 on('#deleteEventBtn','click', async ()=>{
   const id = $('#eventId')?.value; if (!id) return;
 
@@ -1421,7 +1536,21 @@ on('#deleteEventBtn','click', async ()=>{
   });
 
   if (ok) {
-    await deleteEvent(id);        // tu deleteEvent ya muestra toast con Deshacer
+    await deleteEvent(id);
+  }
+});
+
+// Listeners del formulario (globales, no dentro de “Eliminar”)
+on('#eventAllDay','change', (e)=> setAllDayUI(!!e.target.checked));
+
+on('#pickFilesBtn','click', ()=> $('#eventFiles')?.click());
+on('#eventFiles','change', ()=> {
+  const btn = $('#pickFilesBtn');
+  const fi  = $('#eventFiles');
+  if (btn && fi) {
+    btn.textContent = fi.files?.length
+      ? `Archivo adjunto (${fi.files.length})`
+      : 'Archivo adjunto';
   }
 });
 
@@ -2042,6 +2171,7 @@ function applyTheme(theme) {
 
   if (action === 'new') openSheetNew();
   injectGoogleImportUI();
+  injectDrawerVersion();
   ensureSWUpdatePrompt();
   await checkForcedUpdate();                          // al cargar
 document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña

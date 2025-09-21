@@ -93,6 +93,10 @@
       <h3>Tema</h3>
       <button id="themeToggle" class="theme-toggle">Cambiar a Light</button>
     </div>
+    <div class="drawer-footer" id="drawerFooter">
+  <span class="muted">Versión</span>
+  <strong id="appVersionLabel">v-</strong>
+</div>
   </aside>
   <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
 
@@ -183,57 +187,133 @@
   </div>
 
   <!-- Sheet / Panel para Añadir/Editar evento -->
-  <section id="addEventSheet" class="sheet hidden" aria-label="Añadir o editar evento">
-    <header class="sheet-head">
-      <h3 id="sheetTitle">Añadir evento</h3>
-      <button id="closeSheet" class="ghost" aria-label="Cerrar panel">✕</button>
-    </header>
+<section id="addEventSheet" class="sheet hidden" aria-label="Añadir o editar evento">
+  <header class="sheet-head">
+    <h3 id="sheetTitle">Añadir evento</h3>
+    <button id="closeSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
 
-    <form id="eventForm" class="event-form" novalidate>
-      <input type="hidden" id="eventId" />
+  <form id="eventForm" class="event-form list-form" novalidate>
+    <input type="hidden" id="eventId" />
 
-      <label for="eventDate">Fecha *</label>
-      <input id="eventDate" type="date" required />
+    <!-- Título -->
+    <input id="eventTitle" class="title-input" type="text" required placeholder="Título" />
 
-      <label for="eventTime">Hora *</label>
-      <input id="eventTime" type="time" required />
+    <!-- Todo el día -->
+    <div class="row row-toggle">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path>
+      </svg>
+      <label for="eventAllDay" class="row-label">Todo el día</label>
+      <input id="eventAllDay" type="checkbox" class="switch" role="switch" aria-label="Todo el día" />
+    </div>
 
-      <label for="eventTitle">Nombre del evento *</label>
-      <input id="eventTitle" type="text" required placeholder="p. ej., Reunión / Cumple de Ana" />
+    <!-- Inicio → Fin -->
+    <div class="row row-daterange" id="rowDateTime">
+      <div class="dt start">
+        <div class="dt-line">
+          <input id="eventStartDate" type="date" required />
+          <input id="eventStartTime" type="time" required />
+        </div>
+        <small class="muted">inicio</small>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="dt end">
+        <div class="dt-line">
+          <input id="eventEndDate" type="date" />
+          <input id="eventEndTime" type="time" />
+        </div>
+        <small class="muted">fin</small>
+      </div>
+    </div>
 
-      <label for="eventLocation">Ubicación</label>
-      <input id="eventLocation" type="text" placeholder="Oficina, Zoom…" />
+    <!-- Ubicación -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 21s-6-5.33-6-10a6 6 0 1 1 12 0c0 4.67-6 10-6 10z"></path>
+        <circle cx="12" cy="11" r="2.5"></circle>
+      </svg>
+      <input id="eventLocation" type="text" placeholder="Ubicación" />
+    </div>
 
-      <label for="eventClient">Cliente (opcional)</label>
-      <input id="eventClient" type="text" placeholder="Nombre del cliente" />
+    <!-- Alerta -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path>
+      </svg>
+      <label class="row-label" for="eventAlert">Alerta</label>
+      <select id="eventAlert" class="row-value">
+        <option value="none">Sin alerta</option>
+        <option value="at">A la hora del evento</option>
+        <option value="10m">10 minutos antes</option>
+        <option value="30m">30 minutos antes</option>
+        <option value="1h">1 hora antes</option>
+        <option value="1d">1 día antes</option>
+      </select>
+    </div>
 
-      <label for="eventCategory">Categoría *</label>
-      <select id="eventCategory" required>
+    <!-- No repetir -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+        <path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+      </svg>
+      <label class="row-label" for="eventRepeat">No repetir</label>
+      <select id="eventRepeat" class="row-value">
+        <option value="none">No repetir</option>
+        <option value="daily">Cada día</option>
+        <option value="weekly">Cada semana</option>
+        <option value="monthly">Cada mes</option>
+        <option value="yearly">Cada año</option>
+      </select>
+    </div>
+
+    <!-- Notas -->
+    <div class="row row-notes">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22h11A2.5 2.5 0 0 0 20 19.5V7l-5-5H6.5A2.5 2.5 0 0 0 4 4.5z"></path>
+        <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+      </svg>
+      <textarea id="eventNotes" placeholder="Notas"></textarea>
+    </div>
+
+    <!-- Archivo adjunto (row estilo lista) -->
+    <div class="row file-row" id="fileRow">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.12 17.32a2 2 0 0 1-2.83-2.83L16.26 5.5"></path>
+      </svg>
+      <button id="pickFilesBtn" type="button" class="row-link">Archivo adjunto</button>
+      <input id="eventFiles" type="file" multiple hidden />
+    </div>
+
+    <!-- Previsualización (se mantiene) -->
+    <div id="attachmentsPreview" class="attachments-preview"></div>
+
+    <!-- Categoría (se oculta pero se conserva para el modelo) -->
+    <div class="hidden">
+      <label for="eventCategory">Categoría</label>
+      <select id="eventCategory">
         <option value="Trabajo">Trabajo</option>
         <option value="Tarea">Tarea</option>
         <option value="Citas">Citas</option>
         <option value="Cumpleaños">Cumpleaños</option>
         <option value="Otros">Otros…</option>
       </select>
+    </div>
+    <div id="categoryOtherWrap" class="hidden">
+      <label for="eventCategoryOther">Nombre de categoría (Otros)</label>
+      <input id="eventCategoryOther" type="text" placeholder="Especifica la categoría" />
+    </div>
 
-      <div id="categoryOtherWrap" class="hidden">
-        <label for="eventCategoryOther">Nombre de categoría (Otros)</label>
-        <input id="eventCategoryOther" type="text" placeholder="Especifica la categoría" />
-      </div>
-
-      <label for="eventFiles">Adjuntos (imágenes, videos, archivos)</label>
-      <input id="eventFiles" type="file" multiple />
-
-      <div id="attachmentsPreview" class="attachments-preview"></div>
-
-      <menu class="dialog-actions">
-        <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
-        <div class="spacer"></div>
-        <button type="button" id="cancelEventBtn" class="ghost">Cancelar</button>
-        <button type="submit" class="primary">Guardar</button>
-      </menu>
-    </form>
-  </section>
+    <menu class="dialog-actions">
+      <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
+      <div class="spacer"></div>
+      <button type="button" id="cancelEventBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
 
   <!-- Sheet / Panel para Añadir CUMPLEAÑOS -->
 <section id="addBirthdaySheet" class="sheet hidden" aria-label="Añadir cumpleaños">
@@ -348,7 +428,7 @@
   </div>
 </section>
 
-<script src="script.js?v=1004"></script>
+<script defer src="script.js?v=1008"></script>
 <script>
   if (
     'serviceWorker' in navigator &&

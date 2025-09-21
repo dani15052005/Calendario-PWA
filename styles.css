@@ -915,3 +915,131 @@ body.update-block{ overflow: hidden; }
 
 /* opcional: bloquear scroll cuando hay gate */
 body.update-block { overflow: hidden; }
+
+/* ===== Formato tipo lista (como la captura) ===== */
+.list-form .title-input{
+  width:100%; padding:.7rem .8rem; border-radius:.6rem;
+  border:1px solid rgba(255,255,255,.12);
+  background:var(--card); color:var(--text); font-size:1rem; margin-bottom:.4rem;
+}
+html[data-theme="light"] .list-form .title-input{ border-color: rgba(17,24,39,.12); }
+
+.list-form .row{
+  display:flex; align-items:center; gap:.65rem;
+  padding:.8rem 0; border-bottom:1px solid rgba(255,255,255,.08);
+}
+html[data-theme="light"] .list-form .row{ border-bottom-color: rgba(17,24,39,.08); }
+.list-form .row:last-of-type{ border-bottom:0; }
+.list-form .row .icon{ width:20px; height:20px; opacity:.9 }
+.list-form .row .row-label{ font-weight:700; flex:1 }
+.list-form .row .row-value{
+  margin-left:auto; background:transparent; border:0; color:var(--text);
+}
+.list-form .row input[type="text"],
+.list-form .row input[type="date"],
+.list-form .row input[type="time"],
+.list-form .row select,
+.list-form .row textarea{
+  background:transparent; border:0; color:var(--text); width:100%;
+  padding:.2rem 0; outline:none;
+}
+.list-form .row textarea{ min-height:72px; resize:vertical; }
+
+.list-form .row-daterange{
+  gap:.75rem; align-items:flex-start;
+}
+.list-form .row-daterange .dt{ flex:1; }
+.list-form .row-daterange .dt-line{
+  display:flex; gap:.4rem; align-items:center;
+}
+.list-form .row-daterange input[type="date"],
+.list-form .row-daterange input[type="time"]{
+  background:var(--card); border:1px solid rgba(255,255,255,.12);
+  border-radius:.5rem; padding:.45rem .55rem; width:auto;
+}
+html[data-theme="light"] .list-form .row-daterange input{ border-color: rgba(17,24,39,.12); }
+.list-form .row-daterange .arrow{ padding:.55rem .35rem; color:var(--muted); }
+
+/* cuando es "todo el día": oculta los time inputs */
+.list-form .row-daterange.all-day input[type="time"]{ display:none; }
+
+/* Switch accesible */
+.switch{
+  margin-left:auto; appearance:none; width:46px; height:26px; background:#3b3f4a;
+  border-radius:999px; position:relative; border:1px solid rgba(255,255,255,.18);
+  cursor:pointer; outline:none; transition:background .2s ease;
+}
+.switch::after{
+  content:""; position:absolute; top:2px; left:2px; width:22px; height:22px;
+  border-radius:50%; background:#fff; transition: transform .2s ease;
+}
+.switch:checked{ background:var(--primary); border-color:transparent; }
+.switch:checked::after{ transform: translateX(20px); }
+
+/* En el row de adjuntos, el botón parece link */
+.file-row .row-link{
+  margin-left:.25rem; background:transparent; border:0; color:var(--text);
+  text-align:left; padding:.25rem 0; font-weight:600; cursor:pointer;
+}
+.file-row .row-link:hover{ text-decoration:underline; }
+
+/* === Selects legibles en light/dark === */
+:root{
+  --select-bg: #fff;
+  --select-fg: #111;
+  --select-muted: #6b7280; /* gris opciones deshabilitadas en light */
+}
+
+[data-theme="dark"]{
+  --select-bg: #0b1224;    /* mismo tono que tus paneles oscuros */
+  --select-fg: #e6ecff;
+  --select-muted: rgba(230,236,255,.55);
+}
+
+/* El propio select (lista cerrada) */
+select,
+select:focus{
+  background-color: var(--select-bg);
+  color: var(--select-fg);
+  border: 1px solid var(--border, rgba(255,255,255,.12));
+}
+
+/* Opciones del desplegable (lista abierta) – funciona en Chrome/Android, Firefox, Edge */
+select option{
+  background-color: var(--select-bg);
+  color: var(--select-fg);
+}
+select option:disabled{
+  color: var(--select-muted);
+}
+
+/* Por si los tienes con ids específicos */
+#eventAlert, #eventRepeat{
+  background-color: var(--select-bg);
+  color: var(--select-fg);
+}
+#eventAlert option, #eventRepeat option{
+  background-color: var(--select-bg);
+  color: var(--select-fg);
+}
+
+/* Asegura que el pie quede abajo del drawer */
+#drawer{
+  display:flex;
+  flex-direction:column;
+}
+
+/* Pie de versión */
+.drawer-footer{
+  margin-top:auto;
+  padding:.75rem 1rem;
+  font-size:.85rem;
+  border-top:1px solid var(--border, rgba(255,255,255,.12));
+  color:var(--muted, #a1a8c3);
+  background:var(--panel, transparent);
+}
+[data-theme="light"] .drawer-footer{
+  border-top-color: rgba(0,0,0,.08);
+  color:#475569;
+}
+.drawer-footer .muted{ opacity:.85; margin-right:.4rem; }
