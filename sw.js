@@ -1,5 +1,5 @@
 // === sw.js (v1.0.11) – modo dev: network-first para .js/.css, rutas relativas en precache ===
-const VERSION = 'v1.0.9';
+const VERSION = 'v1.0.17';
 const STATIC_CACHE = `static-${VERSION}`;
 const STATIC_ASSETS = [
   './', './index.html', './styles.css', './script.js',

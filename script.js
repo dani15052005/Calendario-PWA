@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.9';
+window.__APP_VERSION__ = '1.0.17';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -224,6 +224,201 @@ function confirmNative(opts = {}) {
   });
 }
 
+// Si ya definiste MONTHS_SHORT antes, no lo dupliques
+const MONTHS_SHORT = ["ene","feb","mar","abr","may","jun","jul","ago","sept","oct","nov","dic"];
+
+function ensureSearchFullUI(){
+  let o = document.getElementById('searchFull');
+  if (o) return o;
+  o = document.createElement('div');
+  o.id = 'searchFull';
+  o.className = 'sf-overlay';
+  o.innerHTML = `
+    <div class="sf-panel" role="dialog" aria-modal="true" aria-labelledby="sfHeading">
+      <div class="sf-header">
+        <div id="sfHeading" class="sf-title">Resultados</div>
+        <button id="sfClose" class="sf-close" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="sfList" class="sf-list"></div>
+    </div>
+  `;
+  document.body.appendChild(o);
+
+  // cerrar al pulsar fuera del panel
+  o.addEventListener('mousedown', (ev)=>{ 
+    const panel = o.querySelector('.sf-panel');
+    if (panel && !panel.contains(ev.target)) closeSearchFull();
+  });
+  o.querySelector('#sfClose').addEventListener('click', closeSearchFull);
+  return o;
+}
+
+function openSearchFull(){
+  const o = ensureSearchFullUI();
+  o.classList.add('open');
+  document.body.classList.add('search-full-open');
+}
+function closeSearchFull(){
+  const o = document.getElementById('searchFull');
+  if (o) o.classList.remove('open');
+  document.body.classList.remove('search-full-open');
+}
+
+function showSearchFull(items, highlightTerms = []){
+  injectSearchFullStyles();
+  const o = ensureSearchFullUI();
+  openSearchFull();
+  const list = o.querySelector('#sfList');
+  list.innerHTML = '';
+
+  const firstTerm = (highlightTerms && highlightTerms.length) ? highlightTerms[0] : '';
+  const addHL = (text) => highlightFragment(text, firstTerm); // usa tu helper existente
+
+  items.forEach(e => {
+    const d = parseDateInput(e.date);
+    const month = MONTHS_SHORT[d.getMonth()];
+    const day   = d.getDate();
+
+    const btn = document.createElement('button');
+    btn.type  = 'button';
+    btn.className = `sf-item cat-${e.category || ''}`;
+
+    const dateBox = document.createElement('div');
+    dateBox.className = 'sf-date';
+    dateBox.innerHTML = `<div class="sf-month">${month}</div><div class="sf-day">${day}</div>`;
+
+    const text = document.createElement('div');
+    text.className = 'sf-text';
+    const title = document.createElement('div'); title.className = 'sf-titleline';
+    const meta  = document.createElement('div'); meta.className  = 'sf-meta';
+
+    const catLabel = (e.category === 'Otros' && e.categoryOther) ? e.categoryOther : e.category;
+    const range = e.allDay || e.category === 'Festivo'
+      ? 'Todo el día'
+      : (e.endTime ? `${e.time || ''} – ${e.endTime}` : (e.time || ''));
+    const metaTextParts = [range];
+    if (e.location) metaTextParts.push(` · ${e.location}`);
+    if (catLabel)   metaTextParts.push(` · ${catLabel}`);
+
+    title.append( addHL(e.title || '(Sin título)') );
+    meta.append( addHL(metaTextParts.join('')) );
+
+    text.appendChild(title);
+    text.appendChild(meta);
+
+    btn.appendChild(dateBox);
+    btn.appendChild(text);
+
+    btn.addEventListener('click', () => {
+      closeSearchFull();
+      openSheetForEdit(e);
+    });
+
+    list.appendChild(btn);
+  });
+}
+
+function ensureAgendaDialog(){
+  let dlg = document.getElementById('dayAgendaModal');
+  if (dlg) return dlg;
+
+  dlg = document.createElement('dialog');
+  dlg.id = 'dayAgendaModal';
+  dlg.className = 'agenda-modal';
+  dlg.innerHTML = `
+    <form method="dialog" class="agenda-card">
+      <div class="ag-head">
+        <div class="ag-date">
+          <span class="ag-daynum" id="agDayNum">--</span>
+          <div>
+            <div class="ag-dow" id="agDow">—</div>
+            <div class="ag-sub" id="agSub">—</div>
+          </div>
+        </div>
+        <button class="ag-close" value="cancel" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="ag-list" id="agList"></div>
+      <div class="ag-footer">
+        <button class="btn small" value="cancel" type="submit">Cerrar</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(dlg);
+  return dlg;
+}
+
+function showDayAgenda(dateObj, events){
+  injectAgendaStyles();
+  const dlg = ensureAgendaDialog();
+
+  // Cabecera
+  const d = dateObj;
+  const dayNum = String(d.getDate());
+  const dow = new Intl.DateTimeFormat('es-ES',{ weekday:'long' }).format(d);
+  const sub = `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+
+  dlg.querySelector('#agDayNum').textContent = dayNum;
+  dlg.querySelector('#agDow').textContent = dow;
+  dlg.querySelector('#agSub').textContent = sub;
+
+  // Lista ordenada por hora (allDay al principio)
+  const list = dlg.querySelector('#agList');
+  list.innerHTML = '';
+
+  const sorted = events.slice().sort((a,b)=>{
+    const ta = (a.allDay || a.category === 'Festivo') ? '00:00' : (a.time || '23:59');
+    const tb = (b.allDay || b.category === 'Festivo') ? '00:00' : (b.time || '23:59');
+    return ta.localeCompare(tb);
+  });
+
+  sorted.forEach((evt, i) => {
+    if (i>0) list.appendChild(Object.assign(document.createElement('div'), { className:'ag-sep' }));
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `ag-item cat-${evt.category}`;
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'ag-time';
+    timeEl.textContent = (evt.allDay || evt.category === 'Festivo')
+      ? 'Todo el día'
+      : (evt.time || '--:--');
+
+    const main = document.createElement('div');
+    main.className = 'ag-main';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'ag-title';
+    titleEl.textContent = evt.title || '(Sin título)';
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'ag-meta';
+    const range = (evt.allDay || evt.category === 'Festivo')
+      ? ''
+      : (evt.endTime ? `${evt.time} – ${evt.endTime}` : (evt.time || ''));
+    const loc = evt.location ? `   ${evt.location}` : '';
+    metaEl.textContent = `${range}${loc}`;
+
+    main.appendChild(titleEl);
+    main.appendChild(metaEl);
+
+    btn.appendChild(timeEl);
+    btn.appendChild(main);
+
+    btn.addEventListener('click', () => {
+      dlg.close();
+      openSheetForEdit(evt); // ← abre el detalle/edición
+    });
+
+    list.appendChild(btn);
+  });
+
+  dlg.showModal();
+  // foco al primer item si hay
+  const first = dlg.querySelector('.ag-item');
+  if (first) setTimeout(()=> first.focus(), 0);
+}
+
 // ===================== Estado =====================
 const state = {
   db: null,
@@ -370,6 +565,9 @@ function renderCalendar(date = state.currentMonth) {
   const base = new Date(date.getFullYear(), date.getMonth(), 1);
   state.currentMonth = base;
   updateAppTitleForMonth();
+  // refresca barra de meses y chip activo cada vez que cambiamos mes
+try { renderMonthPickerBar(); markActiveMonthChip(); } catch {}
+try { markActiveRoller(); } catch {}
 
   const year  = base.getFullYear();
   const month = base.getMonth();
@@ -424,11 +622,13 @@ function renderCalendar(date = state.currentMonth) {
 
     cell.append(head, tags);
 
-    on(cell, 'click', () => {
-      state.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      setViewMode('day');
-    });
-    on(cell, 'keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); state.selectedDate = d; setViewMode('day'); } });
+on(cell, 'click', () => handleDayCellClick(d));
+on(cell, 'keydown', (ev) => {
+  if (ev.key==='Enter' || ev.key===' ') {
+    ev.preventDefault();
+    handleDayCellClick(d);
+  }
+});
 
     grid.append(cell);
   }
@@ -444,7 +644,7 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
     const dayEvts = list
       .filter(ev => state.filters.has(ev.category))
       .slice()
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a,b) => (a.time || '23:59').localeCompare(b.time || '23:59'));
 
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
@@ -459,6 +659,25 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
     }
   }
 });
+}
+
+async function handleDayCellClick(d){
+  const ds = ymd(d);
+  // Leer eventos del día y filtrar por categorías visibles
+  const list = (await getEventsByDate(ds))
+    .filter(ev => state.filters.has(ev.category));
+
+  if (list.length >= 2){
+    // Menú para elegir
+    showDayAgenda(d, list);
+  } else if (list.length === 1){
+    // Ir directo al evento
+    openSheetForEdit(list[0]);
+  } else {
+    // Sin eventos → abre la vista de día como antes
+    state.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    setViewMode('day');
+  }
 }
 
 async function loadMonthEvents(year, month) {
@@ -672,6 +891,15 @@ async function getEventsByDate(dateStr) {
   return res;
 }
 
+async function getEventById(id){
+  let out = null;
+  await tx(['events'], 'readonly', (store) => {
+    const req = store.get(id);
+    req.onsuccess = () => { out = req.result || null; };
+  });
+  return out;
+}
+
 async function saveEvent(ev) {
   ev.preventDefault();
 
@@ -680,6 +908,7 @@ async function saveEvent(ev) {
 
   const title = $('#eventTitle')?.value?.trim();
   const location = $('#eventLocation')?.value?.trim() || '';
+  const client = $('#eventClient')?.value?.trim() || '';
   const category = $('#eventCategory')?.value || 'Trabajo';
   const categoryOther = (category === 'Otros') ? ($('#eventCategoryOther')?.value?.trim() || '') : '';
   const files = $('#eventFiles')?.files;
@@ -693,6 +922,7 @@ async function saveEvent(ev) {
   const alertSel = $('#eventAlert')?.value || 'none';
   const repeatSel = $('#eventRepeat')?.value || 'none';
   const notes = $('#eventNotes')?.value?.trim() || '';
+  const duplicateFromId = $('#duplicateFromId')?.value || '';
 
   if (!title || !sDate || (!allDay && !sTime)) return;
 
@@ -715,6 +945,7 @@ async function saveEvent(ev) {
   const evt = {
     id,
     title, location,
+    client,
     category, categoryOther,
     // compat con vistas existentes:
     date: sDate,
@@ -727,7 +958,8 @@ async function saveEvent(ev) {
     endDate: eDate,   endTime: eTime,
     alert: alertSel,
     repeat: repeatSel,
-    notes
+    notes,
+    needsGCalSync: true
   };
 
   await tx(['events', 'attachments'], 'readwrite', (eventsStore, attStore) => {
@@ -743,7 +975,31 @@ async function saveEvent(ev) {
   closeSheet();
   reRender();
 
-  showToast(isEdit ? 'Evento actualizado' : 'Evento creado', {
+  // Si es una duplicación, copia los adjuntos del evento original al nuevo
+// Si es una duplicación, copia los adjuntos del evento original al nuevo
+if (duplicateFromId) {
+  await tx(['attachments'], 'readwrite', (attStore) => {
+    const idx = attStore.index('by_event');
+    const req = idx.openCursor(IDBKeyRange.only(duplicateFromId));
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      const a = cur.value;
+      const aid = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      attStore.put({
+        id: aid,
+        eventId: id,
+        name: a.name,
+        type: a.type || 'application/octet-stream',
+        blob: a.blob
+      });
+      cur.continue();
+    };
+  });
+}
+
+  const createdMsg = duplicateFromId ? 'Evento duplicado' : 'Evento creado';
+showToast(isEdit ? 'Evento actualizado' : createdMsg, {
+
     actionLabel: 'Deshacer',
     onUndo: async () => {
       if (isEdit && snapshot?.event) {
@@ -773,6 +1029,16 @@ async function deleteEvent(id, { silent = false } = {}) {
     };
   });
 
+  // —— si el usuario lo activó, intenta borrar también en Google ——
+try {
+  const mirrorDelete = localStorage.getItem('gcal.deleteMirror') === '1';
+  if (mirrorDelete && snap?.event) {
+    await deleteRemoteEventIfLinked(snap.event, { calendarId:'primary' });
+  }
+} catch (e) {
+  console.warn('Borrado remoto falló:', e);
+}
+
   closeSheet();
   reRender();
 
@@ -780,12 +1046,61 @@ async function deleteEvent(id, { silent = false } = {}) {
     showToast('Evento eliminado', {
       actionLabel: 'Deshacer',
       onUndo: async () => {
-        // restaurar evento + todos los adjuntos tal cual estaban
-        await restoreEventAndAttachments(snap.event, snap.atts);
-        reRender();
-      }
+  await restoreEventAndAttachments(snap.event, snap.atts);
+  // Si se había borrado también en Google, marcamos para volver a subir
+  try {
+    await tx(['events'], 'readwrite', (s) => {
+      const restored = { ...snap.event, needsGCalSync: true };
+      s.put(restored);
+    });
+  } catch {}
+  reRender();
+}
     });
   }
+}
+
+// Duplicar evento + adjuntos
+async function duplicateEvent(originalId){
+  // 1) Leer evento y adjuntos originales
+  let orig = null;
+  const atts = [];
+  await tx(['events','attachments'], 'readonly', (eventsStore, attStore) => {
+    const g = eventsStore.get(originalId);
+    g.onsuccess = () => { if (g.result) orig = { ...g.result }; };
+
+    const idx = attStore.index('by_event');
+    const req = idx.openCursor(IDBKeyRange.only(originalId));
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      atts.push({ ...cur.value });
+      cur.continue();
+    };
+  });
+
+  if (!orig) throw new Error('Evento no encontrado');
+
+  // 2) Preparar copia con nuevo id
+  const newId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+  const copy  = { ...orig, id: newId, createdAt: Date.now() };
+  delete copy.gcalUpdated; // metadato externo que no copiamos
+  delete copy.gcalId;          // ← que no herede el evento remoto
+  copy.needsGCalSync = true;   // ← que se suba como nuevo
+
+  // monthKey según la fecha de inicio (o date)
+  const baseDate = copy.startDate || copy.date;
+  if (baseDate) copy.monthKey = baseDate.slice(0,7);
+
+  // 3) Guardar copia y clonar adjuntos hacia el nuevo eventId
+  await tx(['events','attachments'], 'readwrite', (eventsStore, attStore) => {
+    eventsStore.put(copy);
+    for (const a of atts) {
+      const attId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+      attStore.put({ id: attId, eventId: newId, name: a.name, type: a.type || 'application/octet-stream', blob: a.blob });
+    }
+  });
+
+  return copy;
 }
 
 async function saveEventFromForm(ev, category){
@@ -802,7 +1117,25 @@ async function saveEventFromForm(ev, category){
   if (!dateStr || !time || !title) return;
 
   const id  = (idInput?.value) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-  const evt = { id, date: dateStr, time, title, location, client, category, categoryOther: '', monthKey: dateStr.slice(0,7), createdAt: Date.now() };
+  const evt = {
+  id,
+  date: dateStr,
+  time,
+  title,
+  location,
+  client,
+  category,
+  categoryOther: '',
+  monthKey: dateStr.slice(0,7),
+  createdAt: Date.now(),
+  // para sincronización con Google:
+  allDay: false,
+  startDate: dateStr,
+  startTime: time,
+  endDate: dateStr,
+  endTime: time,
+  needsGCalSync: true
+};
 
   await tx(['events','attachments'],'readwrite',(eventsStore, attStore) => {
     eventsStore.put(evt);
@@ -818,7 +1151,6 @@ async function saveEventFromForm(ev, category){
   else if (category === 'Tarea') closeSheetById('addTaskSheet');
 
   reRender();
-
   showToast(`${category} creado`, {
     actionLabel: 'Deshacer',
     onUndo: async () => {
@@ -888,6 +1220,9 @@ function openSheetNew() {
   $('#sheetTitle') && ($('#sheetTitle').textContent = 'Añadir evento');
   $('#deleteEventBtn')?.classList.add('hidden');
 
+  $('#duplicateFromId') && ($('#duplicateFromId').value = ''); // limpiar
+  $('#duplicateEventBtn')?.classList.add('hidden');
+
   const idEl = $('#eventId');      if (idEl) idEl.value = '';
   const ttlEl = $('#eventTitle');  if (ttlEl) ttlEl.value = '';
 
@@ -928,6 +1263,9 @@ async function openSheetForEdit(evt) {
   $('#sheetTitle') && ($('#sheetTitle').textContent = 'Editar evento');
   $('#deleteEventBtn')?.classList.remove('hidden');
 
+  $('#duplicateFromId') && ($('#duplicateFromId').value = ''); // limpiar
+  $('#duplicateEventBtn')?.classList.remove('hidden');
+
   $('#eventId') && ($('#eventId').value = evt.id);
   $('#eventTitle') && ($('#eventTitle').value = evt.title || '');
 
@@ -963,6 +1301,57 @@ async function openSheetForEdit(evt) {
   $('#eventFiles') && ($('#eventFiles').value = '');
   await renderAttachmentPreview(evt.id);
   openSheet();
+}
+
+async function startDuplicateFlow(originalId){
+  const evt = await getEventById(originalId);
+  if (!evt) { alert('No se encontró el evento a duplicar'); return; }
+
+  // Título y botones
+  $('#sheetTitle') && ($('#sheetTitle').textContent = 'Duplicar evento');
+  $('#deleteEventBtn')?.classList.add('hidden');     // no borrar en modo nuevo
+  $('#duplicateEventBtn')?.classList.add('hidden');  // no mostrar duplicar dentro de un nuevo
+
+  // Limpiar IDs para que sea un NUEVO evento
+  $('#eventId') && ($('#eventId').value = '');
+  $('#duplicateFromId') && ($('#duplicateFromId').value = originalId);
+
+  // All-day y fechas/horas
+  const allDay = !!evt.allDay;
+  const sDate  = evt.startDate || evt.date;
+  const sTime  = allDay ? '00:00' : (evt.startTime || evt.time || '10:00');
+  const eDate  = evt.endDate || sDate;
+  const eTime  = allDay ? '23:59' : (evt.endTime || '');
+
+  const allDayEl = $('#eventAllDay'); if (allDayEl) allDayEl.checked = allDay;
+  setAllDayUI(allDay);
+
+  // Rellenar campos
+  $('#eventTitle') && ($('#eventTitle').value = evt.title || '');
+  $('#eventStartDate') && ($('#eventStartDate').value = sDate || '');
+  $('#eventStartTime') && ($('#eventStartTime').value = sTime || '');
+  $('#eventEndDate')   && ($('#eventEndDate').value   = eDate || '');
+  $('#eventEndTime')   && ($('#eventEndTime').value   = eTime || '');
+  $('#eventLocation')  && ($('#eventLocation').value  = evt.location || '');
+  $('#eventAlert')     && ($('#eventAlert').value     = evt.alert || 'none');
+  $('#eventRepeat')    && ($('#eventRepeat').value    = evt.repeat || 'none');
+  $('#eventNotes')     && ($('#eventNotes').value     = evt.notes || '');
+
+  $('#eventCategory')  && ($('#eventCategory').value  = evt.category || 'Trabajo');
+  if (evt.category === 'Otros') {
+    $('#categoryOtherWrap')?.classList.remove('hidden');
+    $('#eventCategoryOther') && ($('#eventCategoryOther').value = evt.categoryOther || '');
+  } else {
+    $('#categoryOtherWrap')?.classList.add('hidden');
+    $('#eventCategoryOther') && ($('#eventCategoryOther').value = '');
+  }
+
+  // No cargamos vista previa de adjuntos aquí: se copiarán al Guardar
+  $('#eventFiles') && ($('#eventFiles').value = '');
+  $('#attachmentsPreview') && ($('#attachmentsPreview').innerHTML = '');
+
+  openSheet();
+  showToast('Edita la fecha/hora y pulsa Guardar para crear la copia');
 }
 
 function openSheet() {
@@ -1175,26 +1564,48 @@ function showSearchResultsSafe(items, highlightTerms = []){
 }
 
 // Listeners de búsqueda avanzada
+// —— Listeners de búsqueda a pantalla completa —— //
 let searchTimer = null;
+
+on('#searchInput','focus', () => {
+  // abre overlay si ya hay texto
+  const v = $('#searchInput')?.value?.trim();
+  if (v) openSearchFull();
+});
+
 on('#searchInput','input', (e)=>{
   const raw = e.target.value;
   clearTimeout(searchTimer);
-  if (!raw){ $('#searchResults')?.classList.remove('open'); return; }
+
+  if (!raw){
+    closeSearchFull();
+    $('#searchResults')?.classList.remove('open'); // ocultar dropdown antiguo
+    return;
+  }
+
+  // abrimos overlay
+  openSearchFull();
+
   searchTimer = setTimeout(async ()=>{
-    const items = await searchEventsAdvanced(raw);
+    const items  = await searchEventsAdvanced(raw);
     const parsed = parseAdvancedQuery(raw);
-    showSearchResultsSafe(items, parsed.terms || []);
-  }, 160);
+    showSearchFull(items, parsed.terms || []);
+  }, 140);
 });
+
 on('#clearSearch','click', ()=>{
   const si = $('#searchInput'); if (!si) return;
   si.value = '';
-  $('#searchResults')?.classList.remove('open');
+  closeSearchFull();
+  $('#searchResults')?.classList.remove('open'); // por si acaso
   si.focus();
 });
-document.addEventListener('click', (ev)=>{
-  const wrap = $('#searchWrap'), res = $('#searchResults');
-  if (wrap && !wrap.contains(ev.target) && res && !res.contains(ev.target)) res.classList.remove('open');
+
+// Escape para cerrar
+document.addEventListener('keydown', (ev)=>{
+  if (ev.key === 'Escape' && document.body.classList.contains('search-full-open')) {
+    closeSearchFull();
+  }
 });
 
 // ===================== Transición de mes =====================
@@ -1219,6 +1630,8 @@ function injectEnhancementStyles(){
 
   /* Highlight en resultados */
   .search-results mark{ background: rgba(14,165,233,.22); color: inherit; padding:0 .08em; border-radius:.2em }
+
+  #calendarGrid, #timeGrid, #timeDaysHeader, #monthView, #timeView, .day-col { touch-action: pan-y; }
   `;
   const st = document.createElement('style');
   st.id = 'cal-enhance-styles';
@@ -1254,6 +1667,541 @@ function injectToastStyles(){
   st.textContent = css;
   document.head.appendChild(st);
 }
+
+function injectSearchFullStyles(){
+  if (document.getElementById('sf-styles')) return;
+  const css = `
+  .sf-overlay{position:fixed;inset:0;z-index:10000;display:none;align-items:flex-start;justify-content:center;
+              background:rgba(0,0,0,.55);padding:12px}
+  .sf-overlay.open{display:flex}
+  .sf-panel{width:min(760px,96vw);height:min(86vh,calc(100vh - 24px));background:var(--panel,#0b1020);
+            color:var(--text,#e6ecff);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:1rem;
+            box-shadow:0 18px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden}
+  .sf-header{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:inherit;position:sticky;top:0;z-index:1}
+  .sf-title{font-weight:700;opacity:.9}
+  .sf-close{background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.2rem;opacity:.9}
+  .sf-list{padding:.6rem;overflow:auto;display:flex;flex-direction:column;gap:.6rem}
+  .sf-item{display:flex;gap:.9rem;align-items:center;border:0;border-radius:.8rem;padding:.85rem 1rem;
+           background:#159e8a;color:#052022;cursor:pointer;text-align:left}
+  .sf-item:hover{filter:brightness(1.03)}
+  .sf-date{width:52px;text-align:center}
+  .sf-month{font-size:.8rem;opacity:.85;text-transform:lowercase}
+  .sf-day{font-weight:800;font-size:1.35rem;line-height:1}
+  .sf-text{flex:1;min-width:0}
+  .sf-titleline{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sf-meta{font-size:.92rem;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* respeta tus colores por categoría si quieres */
+  .sf-item.cat-Festivo{background:#0ea5e9;color:#04141c}
+  `;
+  const st = document.createElement('style');
+  st.id = 'sf-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function injectAgendaStyles(){
+  if (document.getElementById('agenda-styles')) return;
+  const css = `
+  dialog.agenda-modal { border:0; padding:0; background:transparent; }
+  .agenda-card{
+    width:min(520px,92vw); max-height:min(74vh,700px); overflow:auto;
+    background:var(--panel,#0b1020); color:var(--text,#e6ecff);
+    border:1px solid var(--border,rgba(255,255,255,.12)); border-radius:1rem;
+    box-shadow:0 18px 40px rgba(0,0,0,.45);
+  }
+  .ag-head{display:flex; align-items:center; justify-content:space-between; padding:1rem 1rem .5rem 1rem; position:sticky; top:0; background:inherit; z-index:1}
+  .ag-date{display:flex; align-items:center; gap:.75rem}
+  .ag-daynum{display:inline-grid; place-items:center; width:42px; height:42px; border-radius:.75rem; background:#ef4444; color:#fff; font-weight:800}
+  .ag-dow{font-weight:700; text-transform:capitalize}
+  .ag-sub{font-size:.9rem; opacity:.8}
+  .ag-close{background:transparent;border:0;cursor:pointer;color:inherit;font-size:1.1rem;opacity:.85}
+  .ag-list{padding:.25rem 0 .25rem}
+  .ag-item{
+    width:100%; display:flex; gap:.9rem; align-items:flex-start; padding:.85rem 1rem; background:transparent; border:0; text-align:left; cursor:pointer;
+  }
+  .ag-item:hover{ background:rgba(255,255,255,.05) }
+  .ag-time{min-width:3.6rem; font-weight:700}
+  .ag-main{flex:1; min-width:0}
+  .ag-title{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ag-meta{font-size:.9rem; opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ag-sep{height:1px; background:var(--border,rgba(255,255,255,.12)); margin:.25rem 0}
+  .ag-footer{padding:.6rem 1rem 1rem; display:flex; justify-content:flex-end}
+  .btn.small{font-size:.9rem; padding:.35rem .7rem}
+  `;
+  const st = document.createElement('style');
+  st.id = 'agenda-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+// ====== Menú de meses al lado del título ======
+function injectMonthPickerStyles(){
+  if (document.getElementById('mp-styles')) return;
+  const css = `
+  /* Botón junto al título */
+  .monthdrop{display:inline-flex;align-items:center;gap:.35rem;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer}
+  .monthdrop .chev{display:inline-block;transform:translateY(1px);opacity:.9;transition:transform .18s ease}
+  .monthdrop[aria-expanded="true"] .chev{transform:rotate(180deg) translateY(-1px)}
+
+  /* Capa del menú */
+  .mp-overlay{position:fixed;left:0;right:0;top:var(--topbar-h,56px);z-index:9000;display:none}
+  .mp-overlay.open{display:block}
+  .mp-bar{
+    background:var(--panel,#0b1020);color:var(--text,#e6ecff);
+    border-top:1px solid var(--border,rgba(255,255,255,.12));
+    border-bottom:1px solid var(--border,rgba(255,255,255,.12));
+    padding:.5rem .6rem; overflow:auto; display:flex; gap:.5rem; align-items:center;
+    box-shadow:0 10px 24px rgba(0,0,0,.28)
+  }
+  .mp-chip{
+    border:1px solid var(--border,rgba(255,255,255,.16));
+    background:transparent;color:inherit;border-radius:.7rem;padding:.35rem .7rem;
+    cursor:pointer; white-space:nowrap; font-weight:600
+  }
+  .mp-chip.active{background:#167E6B;color:#042321;border-color:#0b5b4d}
+  .mp-chip.year{opacity:.75;cursor:default;border-style:dashed}
+  @media (max-width:700px){ .mp-bar{padding:.45rem .4rem;gap:.4rem} }
+    /* ===== Carril móvil (ruleta de meses) ===== */
+  .mp-roller{
+    display:none; position:relative;
+    background:var(--panel,#0b1020); color:var(--text,#e6ecff);
+    border-top:1px solid var(--border,rgba(255,255,255,.12));
+    border-bottom:1px solid var(--border,rgba(255,255,255,.12));
+    padding:.5rem .2rem .75rem;
+  }
+  .mp-roller .mr-year{
+    position:absolute; right:.6rem; top:.35rem; font-size:.9rem; opacity:.7; pointer-events:none;
+  }
+  .mp-roller .mr-track{
+    overflow-x:auto; overflow-y:hidden; white-space:nowrap;
+    scroll-snap-type:x mandatory; padding:.2rem .4rem; -webkit-overflow-scrolling:touch;
+  }
+  .mr-item{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:78px; margin:0 .28rem; padding:.55rem .8rem; border-radius:.75rem;
+    border:1px solid var(--border,rgba(255,255,255,.16));
+    font-weight:700; scroll-snap-align:center; user-select:none;
+  }
+  .mr-item.active{ background:#167E6B; color:#042321; border-color:#0b5b4d }
+  .mr-item[data-m="0"]{ margin-left:.55rem }   /* un pelín más de aire en ene */
+  .mr-item[data-m="11"]{ margin-right:.55rem } /* y en dic */
+
+  /* Con pointer “coarse” (móvil) enseñamos carril; en desktop, la barra clásica */
+  @media (pointer: coarse), (max-width: 700px){
+    .mp-bar{ display:none }
+    .mp-roller{ display:block }
+  }
+  @media (pointer: fine) and (min-width: 701px){
+    .mp-roller{ display:none }
+  }
+  `;
+  const st = document.createElement('style');
+  st.id = 'mp-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function ensureMonthPickerUI(){
+  // 1) Si el overlay no existe, créalo (una sola vez)
+  let overlay = document.getElementById('monthPicker');
+  if (!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'monthPicker';
+    overlay.className = 'mp-overlay';
+    overlay.innerHTML = `
+      <div id="mpBar" class="mp-bar" role="menu"></div>
+      <div id="mpRoller" class="mp-roller" role="menu" aria-label="Elegir mes (desliza)">
+        <div class="mr-year" id="mrYear"></div>
+        <div class="mr-track" id="mrTrack"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+
+  // 2) Botón al lado del título — idempotente y con auto-reparación
+  const currentLabel = (() => {
+    const d = state?.currentMonth || new Date();
+    try { return MONTHS[d.getMonth()] } catch { return (document.getElementById('appTitle')?.textContent || '') }
+  })();
+
+  let dropBtn = document.getElementById('monthDropBtn');
+  if (!dropBtn) {
+    // Primer montaje: reemplaza el nodo actual #appTitle por el botón
+    const oldTitle = document.getElementById('appTitle');
+    if (!oldTitle) return overlay; // nada que hacer
+    dropBtn = document.createElement('button');
+    dropBtn.id = 'monthDropBtn';
+    dropBtn.className = 'monthdrop';
+    dropBtn.setAttribute('aria-haspopup','true');
+    dropBtn.setAttribute('aria-expanded','false');
+    oldTitle.replaceWith(dropBtn);
+  }
+
+  // 3) REHIDRATAR el contenido del botón SIEMPRE (evita duplicados/anidamientos)
+  dropBtn.innerHTML = '';  // ← limpia chevrons/nidos anteriores
+  const span = document.createElement('span');
+  span.id = 'appTitle';
+  span.textContent = currentLabel || '';
+  dropBtn.appendChild(span);
+
+  const chev = document.createElement('span');
+  chev.className = 'chev';
+  chev.setAttribute('aria-hidden','true');
+  chev.textContent = '▾';
+  dropBtn.appendChild(chev);
+
+  return overlay;
+}
+
+// —— Estado del month picker infinito ——
+const mpState = {
+  inited: false,
+  startY: 0, startM: 0,   // mes más antiguo cargado (inclusive)
+  endY: 0,   endM: 0      // mes más moderno cargado (inclusive)
+};
+
+const ymKey = (y,m) => y*12 + m;
+const cmpYM = (aY,aM,bY,bM) => Math.sign(ymKey(aY,aM) - ymKey(bY,bM));
+const nextYM = (y,m) => (m === 11) ? { y:y+1, m:0 }  : { y, m:m+1 };
+const prevYM = (y,m) => (m === 0)  ? { y:y-1, m:11 } : { y, m:m-1 };
+
+function createYearChip(y){
+  const s = document.createElement('span');
+  s.className = 'mp-chip year';
+  s.textContent = y;
+  return s;
+}
+function createMonthChip(y,m){
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mp-chip';
+  b.dataset.y = y;
+  b.dataset.m = m;
+  b.textContent = MONTHS_SHORT[m];
+  b.addEventListener('click', () => gotoMonth(y, m));
+  return b;
+}
+
+function monthsAround(dateObj, prev=3, next=8){
+  const base = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+  const list = [];
+  for (let i = -prev; i <= next; i++){
+    const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+    list.push({ y:d.getFullYear(), m:d.getMonth(), label: MONTHS_SHORT[d.getMonth()] });
+  }
+  // inserta separadores de año donde cambie
+  const withSeparators = [];
+  let lastY = null;
+  for (const x of list){
+    if (lastY !== null && x.y !== lastY){
+      withSeparators.push({ type:'year', y: x.y });
+    }
+    withSeparators.push({ type:'month', ...x });
+    lastY = x.y;
+  }
+  return withSeparators;
+}
+// ===== Carril móvil (ruleta) =====
+const mrState = {
+  inited: false,
+  startY: 0, startM: 0,
+  endY: 0,   endM: 0,
+  commitT: null
+};
+const MR_PRELOAD = 24;  // meses iniciales hacia cada lado
+const MR_CHUNK   = 18;  // meses a añadir cuando te acercas al borde
+
+function createRollerItem(y,m){
+  const el = document.createElement('div');
+  el.className = 'mr-item';
+  el.dataset.y = y;
+  el.dataset.m = m;
+  el.textContent = MONTHS_SHORT[m];
+  return el;
+}
+
+function renderMonthRoller(){
+  const track = document.getElementById('mrTrack'); if (!track) return;
+  const yearLab = document.getElementById('mrYear');
+  const cur = state.currentMonth || new Date();
+
+  if (!mrState.inited){
+    track.innerHTML = '';
+    // Semilla: MR_PRELOAD atrás/adelante
+    const start = new Date(cur.getFullYear(), cur.getMonth() - MR_PRELOAD, 1);
+    const end   = new Date(cur.getFullYear(), cur.getMonth() + MR_PRELOAD, 1);
+    mrState.startY = start.getFullYear(); mrState.startM = start.getMonth();
+    mrState.endY   = end.getFullYear();   mrState.endM   = end.getMonth();
+
+    let y = mrState.startY, m = mrState.startM;
+    while (cmpYM(y,m, mrState.endY, mrState.endM) <= 0){
+      track.appendChild(createRollerItem(y,m));
+      ({y,m} = nextYM(y,m));
+    }
+
+    // Scroll infinito en móvil
+    track.addEventListener('scroll', onRollerScroll, { passive:true });
+
+    mrState.inited = true;
+  }
+
+  // Garantiza que el mes actual está cargado y visible
+  ensureRollerContains(cur.getFullYear(), cur.getMonth());
+  markActiveRoller();
+  centerActiveRoller();
+
+  // Etiqueta de año
+  if (yearLab) yearLab.textContent = String(cur.getFullYear());
+}
+
+function onRollerScroll(e){
+  const track = e.currentTarget;
+  const nearLeft  = track.scrollLeft < 80;
+  const nearRight = (track.scrollWidth - (track.scrollLeft + track.clientWidth)) < 80;
+
+  if (nearLeft)  prependRollerMonths(MR_CHUNK);
+  if (nearRight) appendRollerMonths(MR_CHUNK);
+
+  // Detecta el item central y lo marca + programa cambio de mes
+  const mid = track.scrollLeft + track.clientWidth/2;
+  let best = null, bestD = Infinity;
+  track.querySelectorAll('.mr-item').forEach(it=>{
+    const center = it.offsetLeft + it.offsetWidth/2;
+    const d = Math.abs(center - mid);
+    if (d < bestD){ bestD = d; best = it; }
+  });
+  if (best){
+    const y = +best.dataset.y, m = +best.dataset.m;
+    setRollerActive(y,m);
+    // cambia el año mostrado
+    const yearLab = document.getElementById('mrYear');
+    if (yearLab) yearLab.textContent = String(y);
+
+    // Cambia el mes del calendario cuando el usuario “deja de desplazar”
+    clearTimeout(mrState.commitT);
+    mrState.commitT = setTimeout(()=>{
+      if (state.currentMonth.getFullYear() !== y || state.currentMonth.getMonth() !== m){
+        const target = new Date(y, m, 1);
+        const dir = monthDirection(state.currentMonth, target);
+        animateMonth(dir, ()=>{ state.currentMonth = target; renderCalendar(state.currentMonth); });
+      }
+    }, 120);
+  }
+}
+
+function setRollerActive(y,m){
+  document.querySelectorAll('.mr-item').forEach(n=> n.classList.remove('active'));
+  const chip = document.querySelector(`.mr-item[data-y="${y}"][data-m="${m}"]`);
+  if (chip) chip.classList.add('active');
+}
+
+function markActiveRoller(){
+  const cur = state.currentMonth || new Date();
+  setRollerActive(cur.getFullYear(), cur.getMonth());
+}
+
+function centerActiveRoller(){
+  const cur = state.currentMonth || new Date();
+  const chip = document.querySelector(`.mr-item[data-y="${cur.getFullYear()}"][data-m="${cur.getMonth()}"]`);
+  const track = document.getElementById('mrTrack');
+  if (!chip || !track) return;
+  const target = chip.offsetLeft - (track.clientWidth - chip.offsetWidth)/2;
+  track.scrollTo({ left: target, behavior: 'instant' in track ? 'instant' : 'auto' });
+}
+
+function appendRollerMonths(n){
+  const track = document.getElementById('mrTrack'); if (!track) return;
+  let y = mrState.endY, m = mrState.endM;
+  for (let i=0;i<n;i++){ ({y,m} = nextYM(y,m)); track.appendChild(createRollerItem(y,m)); }
+  mrState.endY = y; mrState.endM = m;
+}
+function prependRollerMonths(n){
+  const track = document.getElementById('mrTrack'); if (!track) return;
+  const firstLeft = track.firstElementChild ? track.firstElementChild.getBoundingClientRect().left : 0;
+
+  let y = mrState.startY, m = mrState.startM;
+  for (let i=0;i<n;i++){ ({y,m} = prevYM(y,m)); track.insertBefore(createRollerItem(y,m), track.firstChild); }
+  mrState.startY = y; mrState.startM = m;
+
+  // compensa el “salto” visual al hacer prepend
+  const newFirstLeft = track.firstElementChild ? track.firstElementChild.getBoundingClientRect().left : 0;
+  track.scrollLeft += (newFirstLeft - firstLeft);
+}
+
+function ensureRollerContains(y,m){
+  const track = document.getElementById('mrTrack'); if (!track) return;
+  while (cmpYM(y,m, mrState.startY, mrState.startM) < 0) prependRollerMonths(MR_CHUNK);
+  while (cmpYM(y,m, mrState.endY,   mrState.endM)   > 0) appendRollerMonths(MR_CHUNK);
+}
+
+function renderMonthPickerBar(){
+  const bar = document.getElementById('mpBar');
+  if (!bar) return;
+
+  const cur = state.currentMonth || new Date();
+
+  // Primera vez: sembramos un rango y conectamos el “infinite scroll”
+  if (!mpState.inited){
+    bar.innerHTML = '';
+
+    // Semilla: 24 meses atrás y 24 hacia delante
+    let start = new Date(cur.getFullYear(), cur.getMonth() - 24, 1);
+    let end   = new Date(cur.getFullYear(), cur.getMonth() + 24, 1);
+    mpState.startY = start.getFullYear(); mpState.startM = start.getMonth();
+    mpState.endY   = end.getFullYear();   mpState.endM   = end.getMonth();
+
+    // Construimos de start → end (inclusive)
+    let y = mpState.startY, m = mpState.startM;
+    while (cmpYM(y,m, mpState.endY, mpState.endM) <= 0){
+      if (m === 0) bar.appendChild(createYearChip(y));     // separador de año
+      bar.appendChild(createMonthChip(y,m));
+      ({y,m} = nextYM(y,m));
+    }
+
+    // Scroll infinito: añadir meses cuando te acercas al borde
+    bar.addEventListener('scroll', () => {
+      const nearLeft  = bar.scrollLeft < 80;
+      const nearRight = (bar.scrollWidth - (bar.scrollLeft + bar.clientWidth)) < 80;
+
+      if (nearLeft)  prependMonths(bar, 18);   // añade 18 meses a la IZQ
+      if (nearRight) appendMonths(bar, 18);    // añade 18 meses a la DCHA
+    }, { passive: true });
+
+    mpState.inited = true;
+  }
+
+  // Asegura que el mes activo existe (si saltas muy lejos)
+  ensureContainsMonth(cur.getFullYear(), cur.getMonth());
+
+  // Marca activo y centra el chip actual
+  markActiveMonthChip();
+  centerActiveChip();
+}
+
+// Añade N meses por la derecha
+function appendMonths(bar, n){
+  let y = mpState.endY, m = mpState.endM;
+  for (let i=0;i<n;i++){
+    ({y,m} = nextYM(y,m));
+    if (m === 0) bar.appendChild(createYearChip(y));
+    bar.appendChild(createMonthChip(y,m));
+  }
+  mpState.endY = y; mpState.endM = m;
+}
+
+// Añade N meses por la izquierda (manteniendo posición visual estable)
+function prependMonths(bar, n){
+  const firstEl = bar.firstElementChild;
+  const firstLeft = firstEl ? firstEl.getBoundingClientRect().left : 0;
+
+  let y = mpState.startY, m = mpState.startM;
+  for (let i=0;i<n;i++){
+    ({y,m} = prevYM(y,m));
+    // Si es enero, el separador de año va ANTES del chip de enero
+    if (m === 0){
+      bar.insertBefore(createYearChip(y), bar.firstChild);
+    }
+    bar.insertBefore(createMonthChip(y,m), bar.firstChild);
+  }
+  mpState.startY = y; mpState.startM = m;
+
+  // Corrige scroll para no “saltar” tras el prepend
+  const newFirstLeft = bar.firstElementChild ? bar.firstElementChild.getBoundingClientRect().left : 0;
+  bar.scrollLeft += (newFirstLeft - firstLeft);
+}
+
+// Garantiza que (y,m) está cargado; si no, extiende hasta incluirlo
+function ensureContainsMonth(y, m){
+  if (!mpState.inited) return;
+  const bar = document.getElementById('mpBar');
+  if (!bar) return;
+
+  // hacia la izquierda
+  while (cmpYM(y,m, mpState.startY, mpState.startM) < 0){
+    prependMonths(bar, 18);
+  }
+  // hacia la derecha
+  while (cmpYM(y,m, mpState.endY, mpState.endM) > 0){
+    appendMonths(bar, 18);
+  }
+}
+
+function markActiveMonthChip(){
+  const cur = state.currentMonth || new Date();
+  const y = cur.getFullYear(), m = cur.getMonth();
+
+  document.querySelectorAll('.mp-chip').forEach(ch => {
+    if (!ch.classList.contains('year')) ch.classList.remove('active');
+    ch.removeAttribute('aria-current');
+  });
+
+  const sel = document.querySelector(`.mp-chip[data-y="${y}"][data-m="${m}"]`);
+  if (sel){
+    sel.classList.add('active');
+    sel.setAttribute('aria-current','true');
+  }
+}
+
+function centerActiveChip(){
+  const cur = state.currentMonth || new Date();
+  const y = cur.getFullYear(), m = cur.getMonth();
+  const chip = document.querySelector(`.mp-chip[data-y="${y}"][data-m="${m}"]`);
+  const bar  = document.getElementById('mpBar');
+  if (!chip || !bar) return;
+  chip.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+
+function openMonthPicker(){
+  const overlay = ensureMonthPickerUI();
+  injectMonthPickerStyles();
+
+  // Desktop
+  renderMonthPickerBar();
+
+  // Móvil
+  renderMonthRoller();
+
+  overlay.classList.add('open');
+  document.getElementById('monthDropBtn')?.setAttribute('aria-expanded','true');
+  document.body.addEventListener('mousedown', _mpOutside, { capture:true });
+}
+
+function closeMonthPicker(){
+  const overlay = document.getElementById('monthPicker');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.getElementById('monthDropBtn')?.setAttribute('aria-expanded','false');
+  document.body.removeEventListener('mousedown', _mpOutside, true);
+}
+
+function toggleMonthPicker(){
+  const overlay = document.getElementById('monthPicker');
+  if (!overlay || !overlay.classList.contains('open')) openMonthPicker();
+  else closeMonthPicker();
+}
+
+function _mpOutside(ev){
+  const overlay = document.getElementById('monthPicker');
+  const btn = document.getElementById('monthDropBtn');
+  if (!overlay) return;
+  const inside = overlay.contains(ev.target) || (btn && (btn === ev.target || btn.contains(ev.target)));
+  if (!inside) closeMonthPicker();
+}
+
+function gotoMonth(year, monthIndex){
+  const target = new Date(year, monthIndex, 1);
+  const dir = monthDirection(state.currentMonth, target);
+  animateMonth(dir, () => {
+    state.currentMonth = target;
+    renderCalendar(state.currentMonth);
+    closeMonthPicker();
+    // aseguramos que el chip activo se remarca
+    setTimeout(markActiveMonthChip, 0);
+  });
+}
+
+// listeners
+document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeMonthPicker(); });
 
 let _toastHost = null;
 function ensureToastHost(){
@@ -1523,6 +2471,18 @@ on('#fabTask','click', ()=>{
 on('#closeSheet','click', closeSheet);
 on('#cancelEventBtn','click', closeSheet);
 on('#eventForm','submit', saveEvent);
+// Botón Duplicar
+on('#duplicateEventBtn','click', async () => {
+  const id = $('#eventId')?.value;
+  if (!id) return;
+  try {
+    await startDuplicateFlow(id);
+  } catch (err) {
+    console.error(err);
+    alert('No se pudo iniciar la duplicación.');
+  }
+});
+
 
 on('#deleteEventBtn','click', async ()=>{
   const id = $('#eventId')?.value; if (!id) return;
@@ -1577,13 +2537,14 @@ function addSwipeNavigation(){
   const isCoarse   = window.matchMedia('(pointer: coarse)').matches;
   const noHover    = window.matchMedia('(hover: none)').matches;
   const smallScreen= window.matchMedia('(max-width: 1280px)').matches;
-
   if (!(isCoarse && noHover && smallScreen)) return;
 
   addSwipeNavigation._enabled = true;
 
   const touch = { active:false, startX:0, startY:0, startTime:0 };
-  const targets = ['#monthView', '#timeView']
+
+  // 👉 Mejora: escucha también en los elementos internos que reciben el gesto
+  const targets = ['#calendarGrid', '#timeGrid', '#timeDaysHeader', '#monthView', '#timeView']
     .map(sel => document.querySelector(sel))
     .filter(Boolean);
 
@@ -1601,8 +2562,10 @@ function addSwipeNavigation(){
     const t = e.touches[0];
     const dx = t.clientX - touch.startX;
     const dy = t.clientY - touch.startY;
+
+    // Solo bloquea el scroll cuando claramente es horizontal
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
-      e.preventDefault();
+      e.preventDefault(); // <-- requiere passive:false y mejor en capture
     }
   };
 
@@ -1623,13 +2586,15 @@ function addSwipeNavigation(){
     }
   };
 
+  // 👇 Nota los options: capture:true + passive:false solo en touchmove
   targets.forEach(el => {
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('touchmove',  onMove,  { passive: false });
-    el.addEventListener('touchend',   onEnd,   { passive: true });
-    el.addEventListener('touchcancel', () => { touch.active = false; }, { passive: true });
+    el.addEventListener('touchstart', onStart, { passive: true,  capture: true });
+    el.addEventListener('touchmove',  onMove,  { passive: false, capture: true });
+    el.addEventListener('touchend',   onEnd,   { passive: true,  capture: true });
+    el.addEventListener('touchcancel', () => { touch.active = false; }, { passive: true, capture: true });
   });
 }
+
 
 function swipePrev(){
   switch (state.viewMode) {
@@ -1741,7 +2706,9 @@ const GOOGLE_CLIENT_ID = '873672608509-dgmd92v2k8fdesd7n5vkg46p2cq8eug4.apps.goo
 // Scopes mínimos: leer eventos + leer ficheros adjuntos de Drive
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/drive.readonly'
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/calendar.events', // escribir/actualizar eventos
+  'https://www.googleapis.com/auth/drive.file'       // subir/gestionar ficheros creados por la app
 ].join(' ');
 
 const ALLDAY_DEFAULT_HOUR = 10; // hora por defecto para eventos de día completo (0..23)
@@ -1797,6 +2764,60 @@ function ensureGoogleToken() {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+async function driveUploadMultipart(file, { name, mimeType } = {}) {
+  const boundary = '-------314159265358979323846';
+  const metadata = {
+    name: name || file.name || 'archivo',
+    mimeType: mimeType || file.type || 'application/octet-stream'
+    // si quieres carpeta, añade: parents: ['<FOLDER_ID>']
+  };
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelim = `\r\n--${boundary}--`;
+
+  const body = new Blob([
+    delimiter,
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n',
+    JSON.stringify(metadata),
+    delimiter,
+    `Content-Type: ${metadata.mimeType}\r\n\r\n`,
+    file,
+    closeDelim
+  ], { type: `multipart/related; boundary=${boundary}` });
+
+  const res = await gapiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+  if (!res.ok) throw new Error('Drive upload failed');
+  return res.json(); // { id, name, mimeType, ... }
+}
+
+async function makeDriveFilePublic(fileId){
+  await gapiFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ role:'reader', type:'anyone' })
+  });
+}
+
+async function ensureDriveIdsForEventAttachments(localEventId){
+  const atts = await getAttachmentsByEvent(localEventId);
+  const out = [];
+  for (const a of atts){
+    // si ya lo subimos antes, guardamos a.gdriveId en IndexedDB
+    if (!a.gdriveId){
+      const up = await driveUploadMultipart(a.blob, { name: a.name, mimeType: a.type });
+      a.gdriveId = up.id;
+      // si quieres que sean públicos:
+      // try { await makeDriveFilePublic(a.gdriveId); } catch{}
+      await tx(['attachments'], 'readwrite', (s)=> s.put(a));
+    }
+    out.push({ fileId: a.gdriveId, title: a.name, mimeType: a.type });
+  }
+  return out;
+}
+
 async function gapiFetch(url, opts = {}, retry = 0) {
   const token = await ensureGoogleToken();
   const doFetch = () => fetch(url, {
@@ -1839,14 +2860,32 @@ function injectGoogleImportUI(){
       <button id="gcalAuthBtn" class="small">Conectar con Google</button>
       <button id="gcalImportBtn" class="small">Importar (2009 → hoy)</button>
     </div>
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem">
+      <button id="gcalPushBtn" class="small">Sincronizar a Google (subir cambios)</button>
+    </div>
     <p class="muted" style="margin:.5rem 0 0;font-size:.85rem">
-      Se importan eventos (incluye adjuntos de Drive). No se borra nada. Se evita duplicar.
-    </p>
+  La importación trae adjuntos de Drive. La sincronización sube altas/cambios (sin borrar salvo que lo actives) y
+  sube adjuntos locales a tu Drive, enlazándolos en Google Calendar.
+</p>
   `;
   drawer.appendChild(sec);
 
-  const authBtn = sec.querySelector('#gcalAuthBtn');
-  const importBtn = sec.querySelector('#gcalImportBtn');
+  const authBtn  = sec.querySelector('#gcalAuthBtn');
+  const importBtn= sec.querySelector('#gcalImportBtn');
+  const pushBtn  = sec.querySelector('#gcalPushBtn');
+
+  // dentro de injectGoogleImportUI, tras crear pushBtn:
+const autoWrap = document.createElement('label');
+autoWrap.style.cssText = 'display:flex;align-items:center;gap:.5rem;margin-top:.5rem;cursor:pointer;font-size:.9rem';
+autoWrap.innerHTML = `<input id="gcalAutoSync" type="checkbox"> Auto-sync (subir cambios)`;
+sec.appendChild(autoWrap);
+
+const autoChk = autoWrap.querySelector('#gcalAutoSync');
+autoChk.checked = (localStorage.getItem('autoSync.enabled') === '1');
+autoChk.addEventListener('change', () => {
+  setAutoSyncEnabled(!!autoChk.checked);
+  showToast( autoChk.checked ? 'Auto-sync activado' : 'Auto-sync desactivado' );
+});
 
   authBtn.addEventListener('click', async () => {
     try { await ensureGoogleToken(); alert('Conexión OK ✅'); }
@@ -1854,27 +2893,50 @@ function injectGoogleImportUI(){
   });
 
   importBtn.addEventListener('click', async () => {
-  try {
-    importBtn.disabled = true;
-    importBtn.textContent = 'Importando… 0';
-    const { imported, duplicates, attsSaved } = await importAllFromGoogle({
-      calendarId: 'primary',
-      sinceISO: '2009-01-01T00:00:00Z',
-      onProgress: ({ imported }) => {
-        importBtn.textContent = `Importando… ${imported}`;
-      }
-    });
-    alert(`Importación completada.\nEventos importados: ${imported}\nDuplicados omitidos: ${duplicates}\nAdjuntos guardados: ${attsSaved}`);
-    (state.viewMode === 'month')
-      ? renderCalendar(state.currentMonth)
-      : renderTimeView(state.viewMode, state.selectedDate || new Date());
-  } catch (e) {
-    console.error(e);
-    alert('Hubo un problema al importar desde Google Calendar.');
-  } finally {
-    importBtn.disabled = false;
-    importBtn.textContent = 'Importar (2009 → hoy)';
-  }
+    try {
+      importBtn.disabled = true;
+      importBtn.textContent = 'Importando… 0';
+      const { imported, duplicates, attsSaved } = await importAllFromGoogle({
+        calendarId: 'primary',
+        sinceISO: '2009-01-01T00:00:00Z',
+        onProgress: ({ imported }) => { importBtn.textContent = `Importando… ${imported}`; }
+      });
+      alert(`Importación completada.\nEventos importados: ${imported}\nDuplicados omitidos: ${duplicates}\nAdjuntos guardados: ${attsSaved}`);
+      reRender();
+    } catch (e) {
+      console.error(e);
+      alert('Hubo un problema al importar desde Google Calendar.');
+    } finally {
+      importBtn.disabled = false;
+      importBtn.textContent = 'Importar (2009 → hoy)';
+    }
+  });
+
+  // 👉 NUEVO: subir cambios locales a Google
+  pushBtn.addEventListener('click', async () => {
+    try {
+      pushBtn.disabled = true;
+      pushBtn.textContent = 'Sincronizando…';
+      const { created, updated, failed } = await pushAllDirtyToGoogle({ calendarId: 'primary' });
+      alert(`Sincronización terminada.\nCreados: ${created}\nActualizados: ${updated}\nFallidos: ${failed}`);
+      reRender();
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo sincronizar con Google Calendar.');
+    } finally {
+      pushBtn.disabled = false;
+      pushBtn.textContent = 'Sincronizar a Google (subir cambios)';
+    }
+  });
+  const delWrap = document.createElement('label');
+delWrap.style.cssText='display:flex;align-items:center;gap:.5rem;margin-top:.25rem;cursor:pointer;font-size:.9rem';
+delWrap.innerHTML = `<input id="gcalDeleteMirror" type="checkbox"> Borrar también en Google`;
+sec.appendChild(delWrap);
+
+const delChk = delWrap.querySelector('#gcalDeleteMirror');
+delChk.checked = (localStorage.getItem('gcal.deleteMirror') === '1');
+delChk.addEventListener('change', ()=> {
+  localStorage.setItem('gcal.deleteMirror', delChk.checked ? '1' : '0');
 });
 }
 
@@ -1892,18 +2954,27 @@ async function mapLimit(arr, limit, mapper){
   return ret;
 }
 
-async function importAllFromGoogle({ calendarId = 'primary', sinceISO = '2009-01-01T00:00:00Z', onProgress } = {}){
+async function importAllFromGoogle({
+  calendarId = 'primary',
+  sinceISO = '2009-01-01T00:00:00Z',
+  horizonYears = 2,          // ← cuantos años hacia adelante traemos
+  onProgress
+} = {}) {
   await ensureGoogleToken();
 
   let pageToken = null;
   let imported = 0, duplicates = 0, attsSaved = 0;
-  const timeMax = new Date().toISOString();
+
+  // ---- NUEVO: timeMax en el futuro ----
+  const tm = new Date();
+  tm.setFullYear(tm.getFullYear() + horizonYears);
+  const timeMaxISO = tm.toISOString();
 
   do {
     const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
     url.searchParams.set('timeMin', sinceISO);
-    url.searchParams.set('timeMax', timeMax);
-    url.searchParams.set('singleEvents', 'true'); // expande las series
+    url.searchParams.set('timeMax', timeMaxISO);  // ← antes era "hoy"
+    url.searchParams.set('singleEvents', 'true');
     url.searchParams.set('orderBy', 'startTime');
     url.searchParams.set('maxResults', '2500');
     url.searchParams.set('fields',
@@ -1912,7 +2983,7 @@ async function importAllFromGoogle({ calendarId = 'primary', sinceISO = '2009-01
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await gapiFetch(url.toString());
-    if (!res.ok) throw new Error('Calendar API error: '+res.status);
+    if (!res.ok) throw new Error('Calendar API error: ' + res.status);
     const data = await res.json();
 
     for (const ev of (data.items || [])) {
@@ -1921,7 +2992,6 @@ async function importAllFromGoogle({ calendarId = 'primary', sinceISO = '2009-01
       const { wasDuplicate, localEvent } = await upsertLocalFromGoogleEvent(ev);
       wasDuplicate ? duplicates++ : imported++;
 
-      // Adjuntos Drive (concurrencia limitada)
       if (!wasDuplicate && Array.isArray(ev.attachments) && ev.attachments.length) {
         const attaches = ev.attachments.filter(a => a.fileId);
         await mapLimit(attaches, 3, async (a) => {
@@ -1986,7 +3056,9 @@ async function upsertLocalFromGoogleEvent(gev){
     category, categoryOther,
     monthKey: date.slice(0,7),
     createdAt: existing?.createdAt || Date.now(),
-    gcalUpdated: gev.updated || null
+    gcalUpdated: gev.updated || null,
+    gcalId: gev.id,
+    needsGCalSync: false,
   };
 
   if (!existing) {
@@ -2032,6 +3104,132 @@ const DRIVE_EXPORT_MAP = {
   'application/vnd.google-apps.spreadsheet':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.google-apps.presentation':'application/pdf'
 };
+
+const GOOGLE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+function addDaysISO(dateStr, days){
+  const d = parseDateInput(dateStr);
+  d.setDate(d.getDate() + (days||0));
+  return ymd(d);
+}
+
+function toGCalPayload(e){
+  const cat = (e.category === 'Otros' && e.categoryOther) ? e.categoryOther : e.category;
+  const descriptionParts = [];
+  if (e.notes) descriptionParts.push(e.notes);
+  if (cat) descriptionParts.push(`Categoría: ${cat}`);
+  const description = descriptionParts.join('\n');
+
+  const base = {
+    summary: e.title || '',
+    location: e.location || '',
+    description
+  };
+
+  if (e.allDay) {
+    // Google usa end.date EXCLUSIVO → +1 día
+    const endDate = addDaysISO(e.endDate || e.startDate || e.date, 1);
+    base.start = { date: e.startDate || e.date };
+    base.end   = { date: endDate };
+  } else {
+    const sDate = e.startDate || e.date;
+    const sTime = e.startTime || e.time || '10:00';
+    const eDate = e.endDate || sDate;
+    const eTime = e.endTime || sTime;
+    base.start  = { dateTime: `${sDate}T${sTime}:00`, timeZone: GOOGLE_TZ };
+    base.end    = { dateTime: `${eDate}T${eTime}:00`, timeZone: GOOGLE_TZ };
+  }
+
+  // Si quieres mapear recordatorios desde e.alert, hazlo aquí (opcional)
+  // base.reminders = { useDefault: true };
+
+  return base;
+}
+
+function getRemoteIdForEvent(e){
+  if (e?.gcalId) return e.gcalId;
+  if (e?.id && String(e.id).startsWith('gcal:')) return String(e.id).slice(5);
+  return null;
+}
+
+// ——— BORRADO EN GOOGLE SI EL EVENTO ESTÁ VINCULADO ———
+async function deleteRemoteEventIfLinked(localEvtOrId, { calendarId='primary' } = {}) {
+  const e = typeof localEvtOrId === 'string' ? await getEventById(localEvtOrId) : localEvtOrId;
+  if (!e) return false;
+  const remoteId = getRemoteIdForEvent(e);
+  if (!remoteId) return false;
+  await ensureGoogleToken();
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(remoteId)}`;
+  const res = await gapiFetch(url, { method:'DELETE' });
+  if (res.status !== 204 && !res.ok) throw new Error('No se pudo borrar en Google');
+  return true;
+}
+
+async function pushEventToGCal(localEvent, calendarId='primary'){
+  await ensureGoogleToken();
+  const urlBase = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+  const existingId = getRemoteIdForEvent(localEvent);
+  const attachments = await ensureDriveIdsForEventAttachments(localEvent.id);
+  const payload = { ...toGCalPayload(localEvent), ...(attachments.length ? { attachments } : {}) };
+  const q = '?supportsAttachments=true';
+
+  let res;
+  if (existingId) {
+    res = await gapiFetch(`${urlBase}/${encodeURIComponent(existingId)}${q}`, {
+      method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
+    });
+    if (res.status === 404) {
+      res = await gapiFetch(`${urlBase}${q}&sendUpdates=none`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
+      });
+    }
+  } else {
+    res = await gapiFetch(`${urlBase}${q}&sendUpdates=none`, {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
+    });
+  }
+
+  if (!res.ok){
+    const txt = await res.text().catch(()=> '');
+    throw new Error(`Error Google ${res.status}: ${txt}`);
+  }
+  const g = await res.json();
+  await tx(['events'],'readwrite',(store)=> {
+    store.put({ ...localEvent, gcalId:g.id, gcalUpdated:g.updated, needsGCalSync:false });
+  });
+  return g;
+}
+
+
+async function pushAllDirtyToGoogle({ calendarId='primary' } = {}){
+  await ensureGoogleToken(); // pedirá el scope de escritura si no lo tiene
+
+  const dirty = [];
+  await tx(['events'], 'readonly', (store) => {
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const cur = req.result; if (!cur) return;
+      const e = cur.value;
+      if (e.needsGCalSync) dirty.push(e);
+      cur.continue();
+    };
+  });
+
+  let created = 0, updated = 0, failed = 0;
+  for (const e of dirty){
+    try {
+      const hadRemote = !!getRemoteIdForEvent(e);
+      await pushEventToGCal(e, calendarId);
+      hadRemote ? updated++ : created++;
+    } catch(err){
+      console.warn('Falló subir evento', e, err);
+      failed++;
+    }
+  }
+
+  showToast(`Google sync: ${created} creados · ${updated} actualizados${failed? ` · ${failed} fallidos` : ''}`);
+  return { created, updated, failed };
+}
 
 /* ---------- Descargar un archivo de Drive por fileId ---------- */
 async function downloadDriveBlob(fileId){
@@ -2104,6 +3302,23 @@ function ensureSWUpdatePrompt() {
   });
 }
 
+let _autoSyncTimer = null;
+
+function setAutoSyncEnabled(on){
+  try { localStorage.setItem('autoSync.enabled', on ? '1' : '0'); } catch {}
+  ensureAutoSyncTimer();
+}
+
+function ensureAutoSyncTimer(){
+  clearInterval(_autoSyncTimer);
+  const enabled = localStorage.getItem('autoSync.enabled') === '1';
+  if (!enabled) return;
+  _autoSyncTimer = setInterval(async () => {
+    try { await pushAllDirtyToGoogle({ calendarId: 'primary' }); }
+    catch (e) { console.debug('Auto-sync: sin cambios o sin conexión'); }
+  }, 3 * 60 * 1000); // cada 3 minutos
+}
+
 /* ---------- (Opcional) Importar de todos tus calendarios, no solo "primary" ----------
    Llama a listCalendars() y recorre. Lo dejamos preparado por si lo quieres usar luego.
 */
@@ -2146,6 +3361,20 @@ function applyTheme(theme) {
 (async function init(){
   injectEnhancementStyles();
   injectToastStyles();
+  injectAgendaStyles();
+  injectSearchFullStyles();
+  ensureSearchFullUI();
+  injectMonthPickerStyles();
+  ensureMonthPickerUI();
+['#prevMonth','#nextMonth','#prevYear','#nextYear'].forEach(sel=>{
+  const el = document.querySelector(sel);
+  if (el) el.style.display = 'none';
+});
+
+
+// botón/gesto para abrirlo
+on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); });
+
   applyTheme(state.theme);
   try { updateCornerBrand(); } catch (_) {}
 
@@ -2173,6 +3402,7 @@ function applyTheme(theme) {
   injectGoogleImportUI();
   injectDrawerVersion();
   ensureSWUpdatePrompt();
+  ensureAutoSyncTimer();
   await checkForcedUpdate();                          // al cargar
 document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña
   if (document.visibilityState === 'visible') checkForcedUpdate();
@@ -2222,4 +3452,9 @@ async function checkForcedUpdate(){
   }catch{
     // si no hay red y ya estaba forzado, seguirá bloqueado por persistedMin
   }
+  // en init(), tras montar todo:
+['#prevMonth','#nextMonth','#prevYear','#nextYear'].forEach(sel=>{
+  const el = document.querySelector(sel);
+  if (el) el.style.display = 'none';
+});
 }

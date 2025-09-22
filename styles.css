@@ -1122,3 +1122,12 @@ select option:disabled{
     gap: 10px;
   }
 }
+
+#duplicateEventBtn { margin-right: .25rem; }
+
+/* Swipe fiable en Android */
+#monthView, #calendarGrid,
+#timeView,  #timeGrid, #timeDaysHeader {
+  touch-action: pan-y;            /* el navegador solo gestiona scroll vertical */
+  overscroll-behavior-x: contain; /* evita gestos laterales del navegador */
+}

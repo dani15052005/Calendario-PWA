@@ -195,6 +195,7 @@
 
   <form id="eventForm" class="event-form list-form" novalidate>
     <input type="hidden" id="eventId" />
+    <input type="hidden" id="duplicateFromId" />
 
     <!-- Título -->
     <input id="eventTitle" class="title-input" type="text" required placeholder="Título" />
@@ -307,6 +308,7 @@
     </div>
 
     <menu class="dialog-actions">
+      <button type="button" id="duplicateEventBtn" class="ghost hidden">Duplicar</button>
       <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
       <div class="spacer"></div>
       <button type="button" id="cancelEventBtn" class="ghost">Cancelar</button>
@@ -428,7 +430,7 @@
   </div>
 </section>
 
-<script defer src="script.js?v=1009"></script>
+<script defer src="script.js?v=1017"></script>
 <script>
   if (
     'serviceWorker' in navigator &&
