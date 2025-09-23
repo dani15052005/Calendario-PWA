@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.18';
+window.__APP_VERSION__ = '1.0.19';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -3125,9 +3125,10 @@ async function importAllFromGoogle({
     url.searchParams.set('singleEvents', 'true');
     url.searchParams.set('orderBy', 'startTime');
     url.searchParams.set('maxResults', '2500');
-    url.searchParams.set('fields',
-      'items(id,status,summary,location,description,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken'
-    );
+    url.searchParams.set(
+  'fields',
+  'items(id,status,summary,location,description,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken'
+);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await gapiFetch(url.toString());
@@ -3376,8 +3377,8 @@ async function pushEventToGCal(localEvent, calendarId='primary'){
 }
 
 
-async function pushAllDirtyToGoogle({ calendarId='primary' } = {}){
-  await ensureGoogleToken(); // pedirá el scope de escritura si no lo tiene
+async function pushAllDirtyToGoogle({ calendarId='primary', quiet=false } = {}){
+  await ensureGoogleToken();
 
   const dirty = [];
   await tx(['events'], 'readonly', (store) => {
@@ -3402,16 +3403,12 @@ async function pushAllDirtyToGoogle({ calendarId='primary' } = {}){
     }
   }
 
-  showToast(`Google sync: ${created} creados · ${updated} actualizados${failed? ` · ${failed} fallidos` : ''}`);
-  return { created, updated, failed };
   if (!quiet && (created || updated || failed)) {
     showToast(`Google sync: ${created} creados · ${updated} actualizados${failed? ` · ${failed} fallidos` : ''}`);
   }
   return { created, updated, failed };
 }
 
-// en ensureAutoSyncTimer:
-await pushAllDirtyToGoogle({ calendarId: 'primary', quiet: true });
 
 /* ---------- Descargar un archivo de Drive por fileId ---------- */
 async function downloadDriveBlob(fileId){
