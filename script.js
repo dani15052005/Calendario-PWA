@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.17';
+window.__APP_VERSION__ = '1.0.18';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -56,14 +56,17 @@ function showUpdateGate(minReq, latest, notes){
   localStorage.setItem('forceUpdate.min', minReq);
 }
 
-function addMinutes(dateStr, timeStr, minutes){
-  const dt = new Date(`${dateStr}T${timeStr || '00:00'}`);
-  dt.setMinutes(dt.getMinutes() + (minutes||0));
-  return {
-    date: ymd(dt),
-    time: `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
-  };
+function toLocalDateTime(dateStr, timeStr='00:00'){
+  const [Y,M,D] = dateStr.split('-').map(Number);
+  const [h,m]   = timeStr.split(':').map(Number);
+  return new Date(Y, M-1, D, h||0, m||0, 0, 0);
 }
+function addMinutes(dateStr, timeStr, minutes=0){
+  const dt = toLocalDateTime(dateStr, timeStr);
+  dt.setMinutes(dt.getMinutes() + minutes);
+  return { date: ymd(dt), time: `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}` };
+}
+
 function setAllDayUI(isAllDay){
   const row = document.getElementById('rowDateTime');
   if (!row) return;
@@ -347,7 +350,12 @@ function ensureAgendaDialog(){
   return dlg;
 }
 
+function canUseDialog(){ return typeof window.HTMLDialogElement === 'function'; }
 function showDayAgenda(dateObj, events){
+  if (!canUseDialog()) { /* fallback ligero: alert/lista o abre directamente el primero */ 
+    if (events.length === 1) return openSheetForEdit(events[0]);
+    // o monta un overlay <div> como hiciste con searchFull
+  }
   injectAgendaStyles();
   const dlg = ensureAgendaDialog();
 
@@ -649,7 +657,8 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
       tag.className = `event-tag cat-${evt.category}`;
-      tag.title = `${evt.time} · ${evt.title}`;
+      const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+      tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title}`;
 
       // ⬇ aquí va el cambio de 3.7, PERO DENTRO del bucle
       const timeLabel = evt.allDay ? '' : (evt.time || '');
@@ -868,15 +877,25 @@ pill.querySelector('.pill-time').textContent = timeText;
 
 async function getEventsByDates(dateStrs) {
   const map = new Map(dateStrs.map(s => [s, []]));
+  const months = [...new Set(dateStrs.map(s => s.slice(0,7)))];
+
   await tx(['events'], 'readonly', (store) => {
-    const req = store.openCursor();
-    req.onsuccess = () => {
-      const cur = req.result; if (!cur) return;
-      const e = cur.value;
-      if (map.has(e.date)) map.get(e.date).push(e);
-      cur.continue();
-    };
+    const idx = store.index('by_month');
+    let pending = months.length;
+
+    months.forEach(m => {
+      const req = idx.openCursor(IDBKeyRange.only(m));
+      req.onsuccess = () => {
+        const cur = req.result; if (!cur) {
+          pending--; return;
+        }
+        const e = cur.value;
+        if (map.has(e.date)) map.get(e.date).push(e);
+        cur.continue();
+      };
+    });
   });
+
   return map;
 }
 
@@ -1117,7 +1136,9 @@ async function saveEventFromForm(ev, category){
   if (!dateStr || !time || !title) return;
 
   const id  = (idInput?.value) || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-  const evt = {
+const plus = addMinutes(dateStr, time, 60); // +1h por defecto
+
+const evt = {
   id,
   date: dateStr,
   time,
@@ -1132,8 +1153,8 @@ async function saveEventFromForm(ev, category){
   allDay: false,
   startDate: dateStr,
   startTime: time,
-  endDate: dateStr,
-  endTime: time,
+  endDate: plus.date,
+  endTime: plus.time,
   needsGCalSync: true
 };
 
@@ -1161,6 +1182,8 @@ async function saveEventFromForm(ev, category){
 }
 
 // ===================== Adjuntos =====================
+let _previewURLs = new Map(); // eventId -> [blobUrls]
+
 async function getAttachmentsByEvent(eventId) {
   const out = [];
   await tx(['attachments'],'readonly',(atts)=>{
@@ -1170,16 +1193,33 @@ async function getAttachmentsByEvent(eventId) {
   });
   return out;
 }
+
 async function renderAttachmentPreview(eventId) {
   const wrap = $('#attachmentsPreview'); if (!wrap) return;
+
+  // revoca URLs anteriores de este evento
+  (_previewURLs.get(eventId) || []).forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
+  _previewURLs.set(eventId, []);
+
   wrap.innerHTML = '';
   if (!eventId) return;
+
   const atts = await getAttachmentsByEvent(eventId);
   for (const a of atts) {
     const card = document.createElement('div'); card.className='attachment-card';
     const url = URL.createObjectURL(a.blob);
-    if (a.type.startsWith('image/')) { const img = document.createElement('img'); img.src = url; img.alt = a.name; card.append(img); }
-    else if (a.type.startsWith('video/')) { const vid = document.createElement('video'); vid.src = url; vid.controls = true; card.append(vid); }
+    _previewURLs.get(eventId).push(url);
+
+    window.addEventListener('beforeunload', ()=> {
+  for (const urls of _previewURLs.values()) urls.forEach(u => { try { URL.revokeObjectURL(u);} catch{} });
+  _previewURLs.clear();
+});
+
+    if (a.type.startsWith('image/')) {
+      const img = document.createElement('img'); img.src = url; img.alt = a.name; card.append(img);
+    } else if (a.type.startsWith('video/')) {
+      const vid = document.createElement('video'); vid.src = url; vid.controls = true; card.append(vid);
+    }
     const name = document.createElement('div'); name.className='name'; name.textContent = a.name;
     card.append(name); wrap.append(card);
   }
@@ -1794,6 +1834,20 @@ function injectMonthPickerStyles(){
   @media (pointer: fine) and (min-width: 701px){
     .mp-roller{ display:none }
   }
+
+    .mp-roller .mr-track{
+    overflow-x:auto; overflow-y:hidden; white-space:nowrap;
+    scroll-snap-type:x mandatory; padding:.2rem .4rem; -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x: contain;         /* ← evita “rebotes” que disparan prepend/append en bucle */
+    scroll-behavior: smooth;                /* ← suaviza el snap manual */
+  }
+  .mr-item{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:78px; margin:0 .28rem; padding:.55rem .8rem; border-radius:.75rem;
+    border:1px solid var(--border,rgba(255,255,255,.16));
+    font-weight:700; scroll-snap-align:center; user-select:none;
+    scroll-snap-stop: always;               /* ← no se “salta” varios meses de golpe */
+  }
   `;
   const st = document.createElement('style');
   st.id = 'mp-styles';
@@ -1864,6 +1918,7 @@ const ymKey = (y,m) => y*12 + m;
 const cmpYM = (aY,aM,bY,bM) => Math.sign(ymKey(aY,aM) - ymKey(bY,bM));
 const nextYM = (y,m) => (m === 11) ? { y:y+1, m:0 }  : { y, m:m+1 };
 const prevYM = (y,m) => (m === 0)  ? { y:y-1, m:11 } : { y, m:m-1 };
+const ymFromKey = (k) => ({ y: Math.floor(k/12), m: ((k%12)+12)%12 });
 
 function createYearChip(y){
   const s = document.createElement('span');
@@ -1906,8 +1961,11 @@ const mrState = {
   inited: false,
   startY: 0, startM: 0,
   endY: 0,   endM: 0,
-  commitT: null
+  commitT: null,
+  extendLockUntil: 0,   // ← throttle de prepend/append
+  gesture: null         // ← info del gesto para snap
 };
+
 const MR_PRELOAD = 24;  // meses iniciales hacia cada lado
 const MR_CHUNK   = 18;  // meses a añadir cuando te acercas al borde
 
@@ -1941,6 +1999,15 @@ function renderMonthRoller(){
 
     // Scroll infinito en móvil
     track.addEventListener('scroll', onRollerScroll, { passive:true });
+        // Snap al soltar
+    const onPointerDown = ()=>{ mrState.gesture = { startScrollLeft: track.scrollLeft }; };
+    const onPointerUp = ()=>{
+      mrState.gesture = null;
+      snapRollerToNearest(track);
+    };
+    track.addEventListener('pointerdown', onPointerDown, { passive:true });
+    track.addEventListener('pointerup',   onPointerUp,   { passive:true });
+    track.addEventListener('pointercancel', ()=>{ mrState.gesture=null; }, { passive:true });
 
     mrState.inited = true;
   }
@@ -1956,37 +2023,47 @@ function renderMonthRoller(){
 
 function onRollerScroll(e){
   const track = e.currentTarget;
-  const nearLeft  = track.scrollLeft < 80;
-  const nearRight = (track.scrollWidth - (track.scrollLeft + track.clientWidth)) < 80;
 
-  if (nearLeft)  prependRollerMonths(MR_CHUNK);
-  if (nearRight) appendRollerMonths(MR_CHUNK);
+  // 1) Extensión con throttle para que no entre en bucle
+  const now = performance.now();
+  const nearLeft  = track.scrollLeft < 120;
+  const nearRight = (track.scrollWidth - (track.scrollLeft + track.clientWidth)) < 120;
 
-  // Detecta el item central y lo marca + programa cambio de mes
+  if (now > mrState.extendLockUntil) {
+    if (nearLeft)  { prependRollerMonths(MR_CHUNK); mrState.extendLockUntil = now + 220; }
+    if (nearRight) { appendRollerMonths(MR_CHUNK);  mrState.extendLockUntil = now + 220; }
+  }
+
+  // 2) Detecta el item centrado
   const mid = track.scrollLeft + track.clientWidth/2;
   let best = null, bestD = Infinity;
   track.querySelectorAll('.mr-item').forEach(it=>{
-    const center = it.offsetLeft + it.offsetWidth/2;
-    const d = Math.abs(center - mid);
+    const c = it.offsetLeft + it.offsetWidth/2;
+    const d = Math.abs(c - mid);
     if (d < bestD){ bestD = d; best = it; }
   });
-  if (best){
-    const y = +best.dataset.y, m = +best.dataset.m;
-    setRollerActive(y,m);
-    // cambia el año mostrado
-    const yearLab = document.getElementById('mrYear');
-    if (yearLab) yearLab.textContent = String(y);
+  if (!best) return;
 
-    // Cambia el mes del calendario cuando el usuario “deja de desplazar”
-    clearTimeout(mrState.commitT);
-    mrState.commitT = setTimeout(()=>{
-      if (state.currentMonth.getFullYear() !== y || state.currentMonth.getMonth() !== m){
-        const target = new Date(y, m, 1);
-        const dir = monthDirection(state.currentMonth, target);
-        animateMonth(dir, ()=>{ state.currentMonth = target; renderCalendar(state.currentMonth); });
-      }
-    }, 120);
-  }
+  const y = +best.dataset.y, m = +best.dataset.m;
+  setRollerActive(y,m);
+  const yearLab = document.getElementById('mrYear'); if (yearLab) yearLab.textContent = String(y);
+
+  // 3) “Compromete” el cambio de mes solo cuando se tranquiliza el scroll
+  clearTimeout(mrState.commitT);
+  mrState.commitT = setTimeout(()=>{
+    const cur = state.currentMonth || new Date();
+    const curIdx = ymKey(cur.getFullYear(), cur.getMonth());
+    const newIdx = ymKey(y,m);
+    // Limita salto por gesto (evita irse a 1964)
+    const MAX_JUMP = 6;
+    const clamped = clamp(newIdx, curIdx - MAX_JUMP, curIdx + MAX_JUMP);
+    const t = ymFromKey(clamped);
+    if (t.y === cur.getFullYear() && t.m === cur.getMonth()) return;
+
+    const target = new Date(t.y, t.m, 1);
+    const dir = monthDirection(state.currentMonth, target);
+    animateMonth(dir, ()=>{ state.currentMonth = target; renderCalendar(state.currentMonth); });
+  }, 240);
 }
 
 function setRollerActive(y,m){
@@ -2007,6 +2084,19 @@ function centerActiveRoller(){
   if (!chip || !track) return;
   const target = chip.offsetLeft - (track.clientWidth - chip.offsetWidth)/2;
   track.scrollTo({ left: target, behavior: 'instant' in track ? 'instant' : 'auto' });
+}
+
+function snapRollerToNearest(track){
+  const mid = track.scrollLeft + track.clientWidth/2;
+  let best = null, bestD = Infinity;
+  track.querySelectorAll('.mr-item').forEach(it=>{
+    const c = it.offsetLeft + it.offsetWidth/2;
+    const d = Math.abs(c - mid);
+    if (d < bestD){ bestD = d; best = it; }
+  });
+  if (!best) return;
+  const targetLeft = best.offsetLeft - (track.clientWidth - best.offsetWidth)/2;
+  track.scrollTo({ left: targetLeft, behavior: 'smooth' });
 }
 
 function appendRollerMonths(n){
@@ -2288,6 +2378,30 @@ function monthDirection(from, to){
   return 'next';
 }
 
+function gcalDescToPlain(desc){
+  if (!desc) return '';
+  // convierte saltos típicos y elimina etiquetas
+  const withNewlines = desc
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = withNewlines;
+  return (tmp.textContent || tmp.innerText || '').trim();
+}
+
+// —— util: ocultar flechas de navegación clásicas —— //
+function hideLegacyNavArrows(){
+  ['#prevMonth','#nextMonth','#prevYear','#nextYear'].forEach(sel=>{
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden','true');
+    el.setAttribute('tabindex','-1');
+    if ('disabled' in el) el.disabled = true;
+    try { el.inert = true; } catch {}
+  });
+}
+
 // ===================== Listeners (generales) =====================
 // Menú
 on('#menuBtn','click', toggleDrawer);
@@ -2530,72 +2644,103 @@ on('#eventCategory','change', (e)=>{
   else $('#categoryOtherWrap')?.classList.add('hidden');
 });
 
-// ===== Navegación por gestos (swipe) SOLO móvil/tablet =====
+// ===== Navegación por gestos (swipe) — versión Pointer Events =====
 function addSwipeNavigation(){
   if (addSwipeNavigation._enabled) return;
 
-  const isCoarse   = window.matchMedia('(pointer: coarse)').matches;
-  const noHover    = window.matchMedia('(hover: none)').matches;
-  const smallScreen= window.matchMedia('(max-width: 1280px)').matches;
-  if (!(isCoarse && noHover && smallScreen)) return;
+  const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+  const smallScreen = window.matchMedia('(max-width: 1280px)').matches;
+  if (!(isCoarse && smallScreen)) return;
 
   addSwipeNavigation._enabled = true;
 
-  const touch = { active:false, startX:0, startY:0, startTime:0 };
-
-  // 👉 Mejora: escucha también en los elementos internos que reciben el gesto
-  const targets = ['#calendarGrid', '#timeGrid', '#timeDaysHeader', '#monthView', '#timeView']
+  const targets = ['#calendarGrid','#timeGrid','#timeDaysHeader','#monthView','#timeView']
     .map(sel => document.querySelector(sel))
     .filter(Boolean);
 
-  const onStart = (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    const t = e.touches[0];
+  const touch = { active:false, startX:0, startY:0, startTime:0, id:null };
+
+  // --- Pointer Events (Android/modern iOS) ---
+  const onPointerDown = (e)=>{
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
     touch.active = true;
-    touch.startX = t.clientX;
-    touch.startY = t.clientY;
-    touch.startTime = Date.now();
+    touch.startX = e.clientX;
+    touch.startY = e.clientY;
+    touch.startTime = performance.now();
+    touch.id = e.pointerId;
+    // Asegura que seguimos recibiendo los move/up aunque haya scroll
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
-  const onMove = (e) => {
-    if (!touch.active) return;
-    const t = e.touches[0];
-    const dx = t.clientX - touch.startX;
-    const dy = t.clientY - touch.startY;
-
-    // Solo bloquea el scroll cuando claramente es horizontal
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
-      e.preventDefault(); // <-- requiere passive:false y mejor en capture
+  const onPointerMove = (e)=>{
+    if (!touch.active || (e.pointerId !== touch.id)) return;
+    const dx = e.clientX - touch.startX;
+    const dy = e.clientY - touch.startY;
+    // Bloquea el scroll vertical solo si el gesto es claramente horizontal
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10){
+      e.preventDefault();
     }
   };
 
-  const onEnd = (e) => {
-    if (!touch.active) return;
-    const dt = Date.now() - touch.startTime;
-    const t = e.changedTouches && e.changedTouches[0];
-    const endX = t ? t.clientX : touch.startX;
-    const endY = t ? t.clientY : touch.startY;
-    const dx = endX - touch.startX;
-    const dy = endY - touch.startY;
-    touch.active = false;
+  const onPointerUp = (e)=>{
+    if (!touch.active || (e.pointerId !== touch.id)) return;
+    const dt = performance.now() - touch.startTime;
+    const dx = e.clientX - touch.startX;
+    const dy = e.clientY - touch.startY;
+    touch.active = false; touch.id = null;
 
-    const THRESHOLD = 60;
-    const SLOPE = 1.2;
-    if (dt < 600 && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy) * SLOPE) {
-      if (dx < 0) swipeNext(); else swipePrev();
+    const THRESHOLD = 60, SLOPE = 1.2, MAX_DT = 600;
+    if (dt < MAX_DT && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE){
+      dx < 0 ? swipeNext() : swipePrev();
     }
   };
 
-  // 👇 Nota los options: capture:true + passive:false solo en touchmove
-  targets.forEach(el => {
-    el.addEventListener('touchstart', onStart, { passive: true,  capture: true });
-    el.addEventListener('touchmove',  onMove,  { passive: false, capture: true });
-    el.addEventListener('touchend',   onEnd,   { passive: true,  capture: true });
-    el.addEventListener('touchcancel', () => { touch.active = false; }, { passive: true, capture: true });
+  const onPointerCancel = ()=>{ touch.active = false; touch.id = null; };
+
+  targets.forEach(el=>{
+    el.addEventListener('pointerdown',  onPointerDown,  { passive:true,  capture:true });
+    el.addEventListener('pointermove',  onPointerMove,  { passive:false, capture:true });
+    el.addEventListener('pointerup',    onPointerUp,    { passive:true,  capture:true });
+    el.addEventListener('pointercancel',onPointerCancel,{ passive:true,  capture:true });
   });
+
+  // --- Fallback para navegadores sin Pointer Events (iOS muy viejo) ---
+  if (!('PointerEvent' in window)) {
+    const onStart = (e)=>{
+      if (!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      touch.active = true; touch.startX = t.clientX; touch.startY = t.clientY; touch.startTime = Date.now();
+    };
+    const onMove = (e)=>{
+      if (!touch.active) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touch.startX;
+      const dy = t.clientY - touch.startY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) e.preventDefault();
+    };
+    const onEnd = (e)=>{
+      if (!touch.active) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      const endX = t ? t.clientX : touch.startX;
+      const endY = t ? t.clientY : touch.startY;
+      const dx = endX - touch.startX;
+      const dy = endY - touch.startY;
+      const dt = Date.now() - touch.startTime;
+      touch.active = false;
+      const THRESHOLD = 60, SLOPE = 1.2;
+      if (dt < 600 && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE) {
+        dx < 0 ? swipeNext() : swipePrev();
+      }
+    };
+    targets.forEach(el=>{
+      el.addEventListener('touchstart', onStart, { passive:true,  capture:true });
+      el.addEventListener('touchmove',  onMove,  { passive:false, capture:true });
+      el.addEventListener('touchend',   onEnd,   { passive:true,  capture:true });
+      el.addEventListener('touchcancel',()=>{ touch.active=false; }, { passive:true, capture:true });
+    });
+  }
 }
-
-
+ 
 function swipePrev(){
   switch (state.viewMode) {
     case 'month': {
@@ -2685,8 +2830,11 @@ function paintNowLine(){
     grid.append(line);
   }
   const minutes = now.getHours()*60 + now.getMinutes();
-  const top = (minutes - (DAY_START_H*60)) * PX_PER_MIN;
-  line.style.top = Math.max(0, top) + 'px';
+const inRange = minutes >= DAY_START_H*60 && minutes <= DAY_END_H*60;
+if (!inRange) { grid.querySelector('.now-line')?.remove(); return; }
+
+const top = (minutes - (DAY_START_H*60)) * PX_PER_MIN;
+line.style.top = Math.max(0, top) + 'px';
 }
 function ensureNowLineTimer(){
   if (_nowLineTimer) return;
@@ -2978,7 +3126,7 @@ async function importAllFromGoogle({
     url.searchParams.set('orderBy', 'startTime');
     url.searchParams.set('maxResults', '2500');
     url.searchParams.set('fields',
-      'items(id,status,summary,location,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken'
+      'items(id,status,summary,location,description,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken'
     );
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
@@ -3016,6 +3164,7 @@ async function importAllFromGoogle({
 /* ---------- Guardar un evento de Google en IndexedDB (sin duplicar) ---------- */
 async function upsertLocalFromGoogleEvent(gev){
   const localId = `gcal:${gev.id}`;
+  const notes = gcalDescToPlain(gev.description || '');
 
   // ¿existe?
   const existing = await new Promise(resolve => {
@@ -3026,40 +3175,62 @@ async function upsertLocalFromGoogleEvent(gev){
     });
   });
 
-  // Fecha/hora
-  let dt;
-  if (gev?.start?.dateTime) {
-    dt = new Date(gev.start.dateTime);
-  } else if (gev?.start?.date) {
-    const [y,m,d] = gev.start.date.split('-').map(Number);
-    dt = new Date(y, m-1, d, ALLDAY_DEFAULT_HOUR, 0, 0);
-  } else {
-    dt = new Date();
-  }
+// Fecha/hora (respetando all-day)
+let allDay = false;
+let date, time, startDate, endDate, startTime, endTime;
 
-  const date = `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
-  const time = `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-  const title    = (gev.summary || '(Sin título)').trim();
-  const location = (gev.location || '').trim();
+if (gev?.start?.date) {
+  // Evento de día completo
+  allDay = true;
+  startDate = gev.start.date;
+  // Google usa end.date EXCLUSIVO → restamos 1 día para tener el fin INCLUSIVO local
+  endDate = (gev.end && gev.end.date) ? addDaysISO(gev.end.date, -1) : startDate;
 
-  // Categoría heurística
-  const lowerSum = title.toLowerCase();
-  let category = 'Citas', categoryOther = '';
-  if (/\bcumple|birthday\b/.test(lowerSum)) category = 'Cumpleaños';
-  else if (/\btarea|task|todo\b/.test(lowerSum)) category = 'Tarea';
-  else if (/\bwork|trabajo|proyecto\b/.test(lowerSum)) category = 'Trabajo';
+  // Compat con vistas
+  date = startDate;
+  time = '00:00';
+  startTime = '00:00';
+  endTime = '23:59';
+} else if (gev?.start?.dateTime) {
+  const sdt = new Date(gev.start.dateTime);
+  const edt = gev.end?.dateTime ? new Date(gev.end.dateTime) : new Date(sdt.getTime() + 60*60000);
 
-  const payload = {
-    id: localId,
-    date, time, title, location,
-    client: '',
-    category, categoryOther,
-    monthKey: date.slice(0,7),
-    createdAt: existing?.createdAt || Date.now(),
-    gcalUpdated: gev.updated || null,
-    gcalId: gev.id,
-    needsGCalSync: false,
-  };
+  startDate = ymd(sdt);
+  startTime = `${pad2(sdt.getHours())}:${pad2(sdt.getMinutes())}`;
+  endDate   = ymd(edt);
+  endTime   = `${pad2(edt.getHours())}:${pad2(edt.getMinutes())}`;
+
+  date = startDate;
+  time = startTime;
+} else {
+  // Fallback
+  const sdt = new Date();
+  const edt = new Date(sdt.getTime() + 60*60000);
+  startDate = ymd(sdt); endDate = ymd(edt);
+  startTime = `${pad2(sdt.getHours())}:${pad2(sdt.getMinutes())}`;
+  endTime   = `${pad2(edt.getHours())}:${pad2(edt.getMinutes())}`;
+  date = startDate; time = startTime;
+}
+
+const title = (gev.summary || '').trim();
+const location = (gev.location || '').trim();
+const category = 'Citas';
+const categoryOther = '';
+const payload = {
+  id: localId,
+  date, time, title, location,
+  client: '',
+  category, categoryOther,
+  monthKey: date.slice(0,7),
+  createdAt: existing?.createdAt || Date.now(),
+  gcalUpdated: gev.updated || null,
+  gcalId: gev.id,
+  needsGCalSync: false,
+  allDay,
+  startDate, startTime,
+  endDate, endTime,
+  notes
+};
 
   if (!existing) {
   const same = await (async () => {
@@ -3084,7 +3255,11 @@ async function upsertLocalFromGoogleEvent(gev){
 
   // Si existe y no hay cambios → lo tratamos como duplicado
   if (existing && existing.gcalUpdated === payload.gcalUpdated) {
-    return { wasDuplicate: true, localEvent: existing };
+   const needsNotesBackfill = (!existing.notes || !existing.notes.trim()) && notes;
+   if (!needsNotesBackfill) {
+     return { wasDuplicate: true, localEvent: existing };
+   }
+   // sigue para hacer put(payload) y rellenar notas
   }
 
   await tx(['events'],'readwrite',(eventsStore)=> eventsStore.put(payload));
@@ -3229,7 +3404,14 @@ async function pushAllDirtyToGoogle({ calendarId='primary' } = {}){
 
   showToast(`Google sync: ${created} creados · ${updated} actualizados${failed? ` · ${failed} fallidos` : ''}`);
   return { created, updated, failed };
+  if (!quiet && (created || updated || failed)) {
+    showToast(`Google sync: ${created} creados · ${updated} actualizados${failed? ` · ${failed} fallidos` : ''}`);
+  }
+  return { created, updated, failed };
 }
+
+// en ensureAutoSyncTimer:
+await pushAllDirtyToGoogle({ calendarId: 'primary', quiet: true });
 
 /* ---------- Descargar un archivo de Drive por fileId ---------- */
 async function downloadDriveBlob(fileId){
@@ -3366,11 +3548,7 @@ function applyTheme(theme) {
   ensureSearchFullUI();
   injectMonthPickerStyles();
   ensureMonthPickerUI();
-['#prevMonth','#nextMonth','#prevYear','#nextYear'].forEach(sel=>{
-  const el = document.querySelector(sel);
-  if (el) el.style.display = 'none';
-});
-
+  hideLegacyNavArrows();
 
 // botón/gesto para abrirlo
 on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); });
@@ -3452,9 +3630,5 @@ async function checkForcedUpdate(){
   }catch{
     // si no hay red y ya estaba forzado, seguirá bloqueado por persistedMin
   }
-  // en init(), tras montar todo:
-['#prevMonth','#nextMonth','#prevYear','#nextYear'].forEach(sel=>{
-  const el = document.querySelector(sel);
-  if (el) el.style.display = 'none';
-});
+hideLegacyNavArrows();
 }
