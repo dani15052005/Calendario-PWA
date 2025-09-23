@@ -1131,3 +1131,18 @@ select option:disabled{
   touch-action: pan-y;            /* el navegador solo gestiona scroll vertical */
   overscroll-behavior-x: contain; /* evita gestos laterales del navegador */
 }
+
+/* Notas: sin scroll y altura libre */
+#eventNotes{
+  height: auto;         /* deja que JS la ajuste */
+  max-height: none;     /* sin límite */
+  overflow-y: hidden;   /* oculta el scroll interno */
+  resize: none;         /* opcional: usuario no “estira” manualmente */
+  line-height: 1.35;    /* queda más legible */
+}
+
+/* Por si el contenedor tuviese límites */
+#notesWrap, .notes-wrap, .notesRow {
+  max-height: none !important;
+  overflow: visible !important;
+}

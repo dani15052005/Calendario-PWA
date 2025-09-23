@@ -290,23 +290,7 @@
 
     <!-- Previsualización (se mantiene) -->
     <div id="attachmentsPreview" class="attachments-preview"></div>
-
-    <!-- Categoría (se oculta pero se conserva para el modelo) -->
-    <div class="hidden">
-      <label for="eventCategory">Categoría</label>
-      <select id="eventCategory">
-        <option value="Trabajo">Trabajo</option>
-        <option value="Tarea">Tarea</option>
-        <option value="Citas">Citas</option>
-        <option value="Cumpleaños">Cumpleaños</option>
-        <option value="Otros">Otros…</option>
-      </select>
-    </div>
-    <div id="categoryOtherWrap" class="hidden">
-      <label for="eventCategoryOther">Nombre de categoría (Otros)</label>
-      <input id="eventCategoryOther" type="text" placeholder="Especifica la categoría" />
-    </div>
-
+    
     <menu class="dialog-actions">
       <button type="button" id="duplicateEventBtn" class="ghost hidden">Duplicar</button>
       <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
@@ -430,7 +414,7 @@
   </div>
 </section>
 
-<script defer src="script.js?v=1019"></script>
+<script defer src="script.js?v=1110"></script>
 <script>
   if (
     'serviceWorker' in navigator &&

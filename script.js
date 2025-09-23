@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.0.19';
+window.__APP_VERSION__ = '1.1,0';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -29,6 +29,8 @@ function qs(el){ return document.querySelector(el); }
 function showUpdateGate(minReq, latest, notes){
   document.body.classList.add('update-block');
   const gate = qs('#updateGate');
+  if (!gate) { console.warn('Falta #updateGate en el DOM'); return; }
+  if (gate.parentNode !== document.body) document.body.appendChild(gate);
 
   // 👉 si #updateGate NO está colgado directamente del <body>, muévelo
   if (gate && gate.parentNode !== document.body) {
@@ -109,6 +111,33 @@ function injectDrawerVersion(){
   const el = document.getElementById('appVersionLabel');
   if (el) el.textContent = 'v' + (window.__APP_VERSION__ || '0.0.0');
 }
+
+// ===== Back manager (hardware back) =====
+const backMgr = (() => {
+  const stack = [];
+  let ignoreNextPop = false;
+
+  function push(kind, onBack) {
+    stack.push({ kind, onBack });
+    try { history.pushState({ app:'cal', kind, t:Date.now() }, ''); } catch {}
+  }
+  function consumeOne() {
+    // Llamar cuando cerramos manualmente (X, tap fuera…)
+    ignoreNextPop = true;
+    try { history.back(); } catch {}
+  }
+
+  window.addEventListener('popstate', () => {
+    if (ignoreNextPop) { ignoreNextPop = false; return; }
+    const top = stack.pop();
+    if (top && typeof top.onBack === 'function') {
+      // Cierre “silencioso”: la función NO debe volver a tocar history.back()
+      top.onBack();
+    }
+  });
+
+  return { push, consumeOne };
+})();
 
 // ===== Snapshot & Restore de eventos + adjuntos =====
 async function snapshotEventAndAttachments(eventId){
@@ -228,7 +257,8 @@ function confirmNative(opts = {}) {
 }
 
 // Si ya definiste MONTHS_SHORT antes, no lo dupliques
-const MONTHS_SHORT = ["ene","feb","mar","abr","may","jun","jul","ago","sept","oct","nov","dic"];
+window.MONTHS_SHORT ||= ["ene","feb","mar","abr","may","jun","jul","ago","sept","oct","nov","dic"];
+const MONTHS_SHORT = window.MONTHS_SHORT;
 
 function ensureSearchFullUI(){
   let o = document.getElementById('searchFull');
@@ -258,13 +288,19 @@ function ensureSearchFullUI(){
 
 function openSearchFull(){
   const o = ensureSearchFullUI();
+  if (!o.classList.contains('open')) {
+    backMgr.push('search', () => { o.classList.remove('open'); document.body.classList.remove('search-full-open'); });
+  }
   o.classList.add('open');
   document.body.classList.add('search-full-open');
 }
 function closeSearchFull(){
   const o = document.getElementById('searchFull');
-  if (o) o.classList.remove('open');
-  document.body.classList.remove('search-full-open');
+  if (o && o.classList.contains('open')) {
+    backMgr.consumeOne();
+    o.classList.remove('open');
+    document.body.classList.remove('search-full-open');
+  }
 }
 
 function showSearchFull(items, highlightTerms = []){
@@ -351,28 +387,24 @@ function ensureAgendaDialog(){
 }
 
 function canUseDialog(){ return typeof window.HTMLDialogElement === 'function'; }
+
 function showDayAgenda(dateObj, events){
-  if (!canUseDialog()) { /* fallback ligero: alert/lista o abre directamente el primero */ 
+  if (!canUseDialog()) {
     if (events.length === 1) return openSheetForEdit(events[0]);
-    // o monta un overlay <div> como hiciste con searchFull
+    return; // (o tu overlay alternativo)
   }
   injectAgendaStyles();
   const dlg = ensureAgendaDialog();
 
-  // Cabecera
+  // --- cabecera ---
   const d = dateObj;
-  const dayNum = String(d.getDate());
-  const dow = new Intl.DateTimeFormat('es-ES',{ weekday:'long' }).format(d);
-  const sub = `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+  dlg.querySelector('#agDayNum').textContent = String(d.getDate());
+  dlg.querySelector('#agDow').textContent = new Intl.DateTimeFormat('es-ES',{ weekday:'long' }).format(d);
+  dlg.querySelector('#agSub').textContent = `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
 
-  dlg.querySelector('#agDayNum').textContent = dayNum;
-  dlg.querySelector('#agDow').textContent = dow;
-  dlg.querySelector('#agSub').textContent = sub;
-
-  // Lista ordenada por hora (allDay al principio)
+  // --- lista ---
   const list = dlg.querySelector('#agList');
   list.innerHTML = '';
-
   const sorted = events.slice().sort((a,b)=>{
     const ta = (a.allDay || a.category === 'Festivo') ? '00:00' : (a.time || '23:59');
     const tb = (b.allDay || b.category === 'Festivo') ? '00:00' : (b.time || '23:59');
@@ -381,50 +413,50 @@ function showDayAgenda(dateObj, events){
 
   sorted.forEach((evt, i) => {
     if (i>0) list.appendChild(Object.assign(document.createElement('div'), { className:'ag-sep' }));
-
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `ag-item cat-${evt.category}`;
-
-    const timeEl = document.createElement('div');
-    timeEl.className = 'ag-time';
-    timeEl.textContent = (evt.allDay || evt.category === 'Festivo')
-      ? 'Todo el día'
-      : (evt.time || '--:--');
-
-    const main = document.createElement('div');
-    main.className = 'ag-main';
-
-    const titleEl = document.createElement('div');
-    titleEl.className = 'ag-title';
+    const timeEl = Object.assign(document.createElement('div'), { className:'ag-time' });
+    timeEl.textContent = (evt.allDay || evt.category === 'Festivo') ? 'Todo el día' : (evt.time || '--:--');
+    const main = Object.assign(document.createElement('div'), { className:'ag-main' });
+    const titleEl = Object.assign(document.createElement('div'), { className:'ag-title' });
     titleEl.textContent = evt.title || '(Sin título)';
-
-    const metaEl = document.createElement('div');
-    metaEl.className = 'ag-meta';
-    const range = (evt.allDay || evt.category === 'Festivo')
-      ? ''
-      : (evt.endTime ? `${evt.time} – ${evt.endTime}` : (evt.time || ''));
+    const metaEl = Object.assign(document.createElement('div'), { className:'ag-meta' });
+    const range = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.endTime ? `${evt.time} – ${evt.endTime}` : (evt.time || ''));
     const loc = evt.location ? `   ${evt.location}` : '';
     metaEl.textContent = `${range}${loc}`;
-
-    main.appendChild(titleEl);
-    main.appendChild(metaEl);
-
-    btn.appendChild(timeEl);
-    btn.appendChild(main);
-
-    btn.addEventListener('click', () => {
-      dlg.close();
-      openSheetForEdit(evt); // ← abre el detalle/edición
-    });
-
+    main.appendChild(titleEl); main.appendChild(metaEl);
+    btn.appendChild(timeEl); btn.appendChild(main);
+    btn.addEventListener('click', () => { dlg.close(); openSheetForEdit(evt); });
     list.appendChild(btn);
   });
 
   dlg.showModal();
-  // foco al primer item si hay
+
+  // 👇 NUEVO: hardware back cierra este diálogo
+  backMgr.push('agenda', () => { try { dlg.close(); } catch {} });
+
+  // 👇 NUEVO: si se cierra “a mano”, consumir la entrada del back
+  dlg.addEventListener('close', function onCloseOnce() {
+    dlg.removeEventListener('close', onCloseOnce);
+    backMgr.consumeOne();
+  }, { once: true });
+
   const first = dlg.querySelector('.ag-item');
   if (first) setTimeout(()=> first.focus(), 0);
+}
+
+
+function setMonthDensity(mode){
+  state.monthDensity = (mode === 'expanded') ? 'expanded' : 'compact';
+  localStorage.setItem('month.density', state.monthDensity);
+  applyMonthDensity();
+  if (state.viewMode === 'month') renderCalendar(state.currentMonth);
+}
+
+function applyMonthDensity(){
+  document.body.classList.toggle('month-expanded', state.monthDensity === 'expanded');
+  document.body.classList.toggle('month-compact',  state.monthDensity !== 'expanded');
 }
 
 // ===================== Estado =====================
@@ -436,6 +468,7 @@ const state = {
   selectedDate: null,
   filters: new Set(['Trabajo','Tarea','Citas','Cumpleaños','Otros','Festivo']),
   holidaysCache: new Map(),
+  monthDensity: localStorage.getItem('month.density') || 'compact', // ⬅️ aquí
 };
 
 // ===================== IndexedDB =====================
@@ -500,14 +533,18 @@ function openDrawer() {
   $('#drawerBackdrop')?.classList.add('open');
   $('#menuBtn')?.classList.add('active');
   $('#menuBtn')?.setAttribute('aria-expanded','true');
+  backMgr.push('drawer', () => closeDrawer(/*silent*/true));
 }
-function closeDrawer() {
+function closeDrawer(silent=false) {
+  if (!silent) backMgr.consumeOne();
   $('#drawer')?.classList.remove('open');
   $('#drawer')?.setAttribute('aria-hidden','true');
   $('#drawerBackdrop')?.classList.remove('open');
   $('#menuBtn')?.classList.remove('active');
   $('#menuBtn')?.setAttribute('aria-expanded','false');
 }
+
+
 function toggleDrawer() {
   ($('#drawer')?.classList.contains('open')) ? closeDrawer() : openDrawer();
 }
@@ -661,8 +698,10 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
       tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title}`;
 
       // ⬇ aquí va el cambio de 3.7, PERO DENTRO del bucle
-      const timeLabel = evt.allDay ? '' : (evt.time || '');
-      tag.textContent = `${timeLabel ? timeLabel + ' ' : ''}${evt.title}`;
+      const showTitleOnly = (state.monthDensity === 'expanded'); // título sin hora en modo expandido
+const timeLabel = (showTitleOnly || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+tag.textContent = `${timeLabel ? timeLabel + ' ' : ''}${evt.title}`;
+
 
       box.append(tag);
     }
@@ -1184,6 +1223,20 @@ const evt = {
 // ===================== Adjuntos =====================
 let _previewURLs = new Map(); // eventId -> [blobUrls]
 
+function ensurePreviewCleanupOnce() {
+  if (ensurePreviewCleanupOnce._done) return; // evita registrarlo varias veces
+  window.addEventListener('beforeunload', () => {
+    try {
+      for (const urls of _previewURLs.values()) {
+        for (const u of urls) { try { URL.revokeObjectURL(u); } catch {} }
+      }
+    } finally {
+      _previewURLs.clear();
+    }
+  });
+  ensurePreviewCleanupOnce._done = true;
+}
+
 async function getAttachmentsByEvent(eventId) {
   const out = [];
   await tx(['attachments'],'readonly',(atts)=>{
@@ -1195,9 +1248,10 @@ async function getAttachmentsByEvent(eventId) {
 }
 
 async function renderAttachmentPreview(eventId) {
+  injectAttachmentViewerStyles(); // por si no se ha llamado aún
   const wrap = $('#attachmentsPreview'); if (!wrap) return;
 
-  // revoca URLs anteriores de este evento
+  // Revoca URLs anteriores de este evento
   (_previewURLs.get(eventId) || []).forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
   _previewURLs.set(eventId, []);
 
@@ -1210,19 +1264,216 @@ async function renderAttachmentPreview(eventId) {
     const url = URL.createObjectURL(a.blob);
     _previewURLs.get(eventId).push(url);
 
-    window.addEventListener('beforeunload', ()=> {
-  for (const urls of _previewURLs.values()) urls.forEach(u => { try { URL.revokeObjectURL(u);} catch{} });
-  _previewURLs.clear();
-});
-
-    if (a.type.startsWith('image/')) {
-      const img = document.createElement('img'); img.src = url; img.alt = a.name; card.append(img);
-    } else if (a.type.startsWith('video/')) {
-      const vid = document.createElement('video'); vid.src = url; vid.controls = true; card.append(vid);
+    // preview
+    if (a.type && a.type.startsWith('image/')) {
+      const img = document.createElement('img'); img.src = url; img.alt = a.name;
+      card.append(img);
+    } else if (a.type && a.type.startsWith('video/')) {
+      const vid = document.createElement('video'); vid.src = url; vid.controls = true;
+      card.append(vid);
+    } else {
+      const box = document.createElement('div');
+      box.style.padding = '.6rem'; box.style.textAlign='center';
+      box.textContent = '📄 ' + (a.name || 'archivo');
+      card.append(box);
     }
+
     const name = document.createElement('div'); name.className='name'; name.textContent = a.name;
-    card.append(name); wrap.append(card);
+    card.append(name);
+
+    // abrir visor a pantalla completa al pulsar en la tarjeta
+    card.tabIndex = 0;
+    card.addEventListener('click', () => openAttachmentViewer(a, url));
+    card.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); openAttachmentViewer(a, url); } });
+
+    // botón borrar (permanente)
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'att-del';
+    delBtn.title = 'Eliminar adjunto';
+    delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation(); // no abrir visor
+      handleAttachmentDelete(eventId, a);
+    });
+    card.append(delBtn);
+
+    wrap.append(card);
   }
+}
+
+/* === Visor a pantalla completa + estilos mínimos === */
+function injectAttachmentViewerStyles(){
+  if (document.getElementById('att-viewer-css')) return;
+  const css = `
+  dialog#attViewer{border:0;padding:0;background:transparent}
+  .attv-card{
+    width:min(96vw,1100px); height:min(96vh,900px); display:flex; flex-direction:column;
+    background:var(--panel,#0b1020); color:var(--text,#e6ecff);
+    border:1px solid var(--border,rgba(255,255,255,.12)); border-radius:1rem;
+    box-shadow:0 18px 40px rgba(0,0,0,.45); overflow:hidden;
+  }
+  .attv-head{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;border-bottom:1px solid var(--border,rgba(255,255,255,.12))}
+  .attv-title{font-weight:700;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .attv-close{background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.1rem;opacity:.9}
+  .attv-body{flex:1;display:flex;align-items:center;justify-content:center;background:#000}
+  .attv-body img,.attv-body video,.attv-body iframe,.attv-body embed{max-width:100%;max-height:100%;width:auto;height:auto;display:block}
+  /* Botón borrar en la tarjeta pequeña */
+  .attachment-card{position:relative; cursor:pointer}
+  .attachment-card .att-del{
+    position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55); color:#fff; border:0; border-radius:.5rem;
+    padding:.25rem .45rem; cursor:pointer
+  }
+  `;
+  const st = document.createElement('style');
+  st.id = 'att-viewer-css';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function ensureAttachmentViewerUI(){
+  let dlg = document.getElementById('attViewer');
+  if (dlg) return dlg;
+  injectAttachmentViewerStyles();
+  dlg = document.createElement('dialog');
+  dlg.id = 'attViewer';
+  dlg.innerHTML = `
+    <form method="dialog" class="attv-card">
+      <div class="attv-head">
+        <div class="attv-title" id="attvTitle">Adjunto</div>
+        <button class="attv-close" value="cancel" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="attv-body"><div id="attvMedia"></div></div>
+    </form>
+  `;
+  document.body.appendChild(dlg);
+  return dlg;
+}
+
+function openAttachmentViewer(att, blobUrl){
+  const dlg = ensureAttachmentViewerUI();
+  const titleEl = dlg.querySelector('#attvTitle');
+  const mediaBox = dlg.querySelector('#attvMedia');
+  titleEl.textContent = att.name || 'Adjunto';
+  mediaBox.innerHTML = '';
+
+  const t = att.type || '';
+  if (t.startsWith('image/')) {
+    const img = document.createElement('img');
+    img.src = blobUrl; img.alt = att.name || '';
+    mediaBox.appendChild(img);
+  } else if (t.startsWith('video/')) {
+    const vid = document.createElement('video');
+    vid.src = blobUrl; vid.controls = true; vid.autoplay = true;
+    mediaBox.appendChild(vid);
+  } else if (t === 'application/pdf') {
+    const frame = document.createElement('iframe');
+    frame.src = blobUrl; frame.style.width='100%'; frame.style.height='100%';
+    mediaBox.appendChild(frame);
+  } else {
+    const box = document.createElement('div');
+    box.style.padding = '1rem'; box.style.textAlign = 'center';
+    const p = document.createElement('p'); p.textContent = 'Tipo de archivo no previsualizable.';
+    const a = document.createElement('a'); a.href = blobUrl; a.download = att.name || 'archivo'; a.textContent = 'Descargar';
+    a.style.display='inline-block'; a.style.marginTop='.6rem';
+    box.append(p,a); mediaBox.appendChild(box);
+  }
+
+  // abrir como modal + back hardware
+  dlg.showModal();
+  backMgr.push('attViewer', () => { try{ dlg.close(); }catch{} });
+  dlg.addEventListener('close', function onCloseOnce(){
+    dlg.removeEventListener('close', onCloseOnce);
+    backMgr.consumeOne();
+  }, { once:true });
+}
+
+function closeAttachmentViewer(){
+  const dlg = document.getElementById('attViewer');
+  if (!dlg) return;
+  try { dlg.close(); } catch {}
+}
+
+/* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
+async function deleteDriveFileIfAllowed(att){
+  try{
+    const delMirror = localStorage.getItem('gdrive.deleteMirror') === '1';
+    if (!delMirror || !att.gdriveId) return;
+    await ensureGoogleToken();
+    const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(att.gdriveId)}`;
+    const res = await gapiFetch(url, { method:'DELETE' });
+    if (res.status !== 204 && !res.ok) console.warn('No se pudo borrar en Drive');
+  }catch(e){ console.warn('Drive delete failed:', e); }
+}
+
+async function handleAttachmentDelete(eventId, att){
+  const ok = await confirmNative({
+    title: 'Eliminar adjunto',
+    message: `¿Eliminar “${att.name}”? Esta acción es permanente.`,
+    confirmText: 'Eliminar',
+    cancelText: 'Cancelar',
+    destructive: true
+  });
+  if (!ok) return;
+
+  // (Opcional) borrar también de tu Drive si lo activas con localStorage.setItem('gdrive.deleteMirror','1')
+  try { await deleteDriveFileIfAllowed(att); } catch {}
+
+  // 1) borra en IndexedDB
+  await tx(['attachments'], 'readwrite', (s)=> s.delete(att.id));
+
+  // 2) cierra visor si estaba abierto
+  try { closeAttachmentViewer(); } catch {}
+
+  // 3) refresca la lista (esto también revoca las blob URLs antiguas)
+  await renderAttachmentPreview(eventId);
+
+  // 4) aviso simple (sin deshacer)
+  showToast('Adjunto eliminado', { actionLabel: null, onUndo: null, duration: 3000 });
+}
+
+// ——— Garantiza que existe la UI de categoría en el sheet de evento ———
+function ensureCategoryUI(){
+  const sheet = document.getElementById('addEventSheet');
+  if (!sheet) return;
+
+  // mete el bloque DENTRO del form si existe; si no, dentro del sheet
+  const form = sheet.querySelector('form') || sheet;
+
+  // si ya existe, no lo duplicamos
+  if (form.querySelector('#eventCategory')) return;
+
+  const html = `
+  <div class="row" id="categoryRow">
+    <label for="eventCategory">Categoría</label>
+    <select id="eventCategory" name="category">
+      <option value="Trabajo">Trabajo</option>
+      <option value="Tarea">Tarea</option>
+      <option value="Citas">Citas</option>
+      <option value="Cumpleaños">Cumpleaños</option>
+      <option value="Otros">Otros</option>
+      <option value="Festivo">Festivo</option>
+    </select>
+  </div>
+  <div class="row hidden" id="categoryOtherWrap">
+    <label for="eventCategoryOther">Otra categoría</label>
+    <input id="eventCategoryOther" name="categoryOther" type="text" placeholder="Especifica la categoría">
+  </div>
+`;
+const afterEl =
+  form.querySelector('#eventNotes')?.closest('.row') ||
+  form.querySelector('#eventLocation')?.closest('.row');
+
+  if (afterEl) afterEl.insertAdjacentHTML('afterend', html);
+  else form.insertAdjacentHTML('beforeend', html);
+
+  // listener local para mostrar el campo “Otros”
+  const sel = form.querySelector('#eventCategory');
+  const otherWrap = form.querySelector('#categoryOtherWrap');
+  sel.addEventListener('change', (e) => {
+    const show = e.target.value === 'Otros';
+    otherWrap?.classList.toggle('hidden', !show);
+  });
 }
 
 // ===================== Sheets (Añadir/Editar) =====================
@@ -1250,6 +1501,14 @@ function detachOutsideCloseForSheet(sheetEl){
   document.removeEventListener('touchstart', handler, true);
   _sheetOutsideHandlers.delete(id);
 }
+
+function autosizeNotes(){
+  const ta = document.getElementById('eventNotes');
+  if (!ta) return;
+  ta.style.height = 'auto';                 // reset
+  ta.style.height = ta.scrollHeight + 'px'; // ajusta a contenido
+}
+on('#eventNotes', 'input', autosizeNotes);
 
 function openSheetNew() {
   const baseDate = state.selectedDate || new Date();
@@ -1293,8 +1552,10 @@ function openSheetNew() {
 
   $('#eventFiles') && ($('#eventFiles').value = '');
   $('#attachmentsPreview') && ($('#attachmentsPreview').innerHTML = '');
-
   openSheet();
+
+  $('#eventNotes') && ($('#eventNotes').value = '');
+  autosizeNotes();
 }
 
 async function openSheetForEdit(evt) {
@@ -1341,6 +1602,9 @@ async function openSheetForEdit(evt) {
   $('#eventFiles') && ($('#eventFiles').value = '');
   await renderAttachmentPreview(evt.id);
   openSheet();
+
+  $('#eventNotes') && ($('#eventNotes').value = evt.notes || '');
+autosizeNotes();
 }
 
 async function startDuplicateFlow(originalId){
@@ -1396,16 +1660,25 @@ async function startDuplicateFlow(originalId){
 
 function openSheet() {
   const sheet = $('#addEventSheet'); if (!sheet) return;
+
+  ensureCategoryUI();
+  
   sheet.classList.remove('hidden');
   requestAnimationFrame(()=> sheet.classList.add('open'));
-  attachOutsideCloseForSheet(sheet, closeSheet);
+  attachOutsideCloseForSheet(sheet, () => closeSheet()); // tap fuera = cerrar
+  // <- tecla atrás cierra esta hoja
+  backMgr.push('sheet', () => { sheet.classList.remove('open'); setTimeout(()=> sheet.classList.add('hidden'), 250); detachOutsideCloseForSheet(sheet); });
 }
+
 function closeSheet() {
   const sheet = $('#addEventSheet'); if (!sheet) return;
+  // consume la entrada del historial porque estamos cerrando “a mano”
+  backMgr.consumeOne();
   sheet.classList.remove('open');
   setTimeout(()=> sheet.classList.add('hidden'), 250);
   detachOutsideCloseForSheet(sheet);
 }
+
 
 // Helpers para otros sheets
 function openSheetById(id){
@@ -1413,13 +1686,16 @@ function openSheetById(id){
   sheet.classList.remove('hidden');
   requestAnimationFrame(()=> sheet.classList.add('open'));
   attachOutsideCloseForSheet(sheet, ()=> closeSheetById(id));
+  backMgr.push('sheet:'+id, () => { sheet.classList.remove('open'); setTimeout(()=> sheet.classList.add('hidden'), 250); detachOutsideCloseForSheet(sheet); });
 }
 function closeSheetById(id){
   const sheet = document.getElementById(id); if (!sheet) return;
+  backMgr.consumeOne();
   sheet.classList.remove('open');
   setTimeout(()=> sheet.classList.add('hidden'), 250);
   detachOutsideCloseForSheet(sheet);
 }
+
 
 // ===================== Búsqueda (AVANZADA) =====================
 function parseAdvancedQuery(raw) {
@@ -1770,6 +2046,31 @@ function injectAgendaStyles(){
   `;
   const st = document.createElement('style');
   st.id = 'agenda-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function injectMonthDensityStyles(){
+  if (document.getElementById('month-density-css')) return;
+  const css = `
+  /* Contenedor de tags: columna con un poco de aire */
+  .events-tags{ display:flex; flex-direction:column; gap:3px }
+
+  /* ====== MODO COMPACTO (solo barrita de color) ====== */
+  body.month-compact .event-tag{
+    display:block; height:6px; padding:0; border-radius:5px;
+    font-size:0; line-height:0; overflow:hidden; /* oculta cualquier texto */
+  }
+
+  /* ====== MODO EXPANDIDO (píldora con texto truncado) ====== */
+  body.month-expanded .event-tag{
+    display:block; height:18px; padding:0 .45rem; border-radius:10px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:.78rem; line-height:18px;
+  }
+  `;
+  const st = document.createElement('style');
+  st.id = 'month-density-css';
   st.textContent = css;
   document.head.appendChild(st);
 }
@@ -2244,21 +2545,19 @@ function centerActiveChip(){
 function openMonthPicker(){
   const overlay = ensureMonthPickerUI();
   injectMonthPickerStyles();
-
-  // Desktop
   renderMonthPickerBar();
-
-  // Móvil
   renderMonthRoller();
-
+  if (!overlay.classList.contains('open')) {
+    backMgr.push('monthPicker', () => { overlay.classList.remove('open'); document.getElementById('monthDropBtn')?.setAttribute('aria-expanded','false'); });
+  }
   overlay.classList.add('open');
   document.getElementById('monthDropBtn')?.setAttribute('aria-expanded','true');
   document.body.addEventListener('mousedown', _mpOutside, { capture:true });
 }
-
 function closeMonthPicker(){
   const overlay = document.getElementById('monthPicker');
-  if (!overlay) return;
+  if (!overlay || !overlay.classList.contains('open')) return;
+  backMgr.consumeOne();
   overlay.classList.remove('open');
   document.getElementById('monthDropBtn')?.setAttribute('aria-expanded','false');
   document.body.removeEventListener('mousedown', _mpOutside, true);
@@ -2638,12 +2937,6 @@ on('#closeTaskSheet','click', ()=> closeSheetById('addTaskSheet'));
 on('#cancelTaskBtn','click', ()=> closeSheetById('addTaskSheet'));
 on('#taskForm','submit', (ev)=> saveEventFromForm(ev, 'Tarea'));
 
-// Mostrar input “Otros”
-on('#eventCategory','change', (e)=>{
-  if (e.target.value === 'Otros') $('#categoryOtherWrap')?.classList.remove('hidden');
-  else $('#categoryOtherWrap')?.classList.add('hidden');
-});
-
 // ===== Navegación por gestos (swipe) — versión Pointer Events =====
 function addSwipeNavigation(){
   if (addSwipeNavigation._enabled) return;
@@ -2690,9 +2983,18 @@ function addSwipeNavigation(){
     touch.active = false; touch.id = null;
 
     const THRESHOLD = 60, SLOPE = 1.2, MAX_DT = 600;
-    if (dt < MAX_DT && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE){
-      dx < 0 ? swipeNext() : swipePrev();
-    }
+if (dt < MAX_DT) {
+  const horiz = Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE;
+  const vert  = Math.abs(dy) > THRESHOLD && Math.abs(dy) > Math.abs(dx)*SLOPE;
+
+  if (horiz) {
+    dx < 0 ? swipeNext() : swipePrev();
+  } else if (vert && state.viewMode === 'month') {
+    // ↓ expande (píldoras con texto) · ↑ compacta (barritas)
+    dy > 0 ? setMonthDensity('expanded') : setMonthDensity('compact');
+  }
+}
+
   };
 
   const onPointerCancel = ()=>{ touch.active = false; touch.id = null; };
@@ -2864,51 +3166,58 @@ const ALLDAY_DEFAULT_HOUR = 10; // hora por defecto para eventos de día complet
 let _googleAccessToken = null;
 let _tokenClient = null;
 
-function ensureGoogleToken() {
+function haveGIS(){
+  return !!(window.google && google.accounts && google.accounts.oauth2);
+}
+function initTokenClient(){
+  if (_tokenClient || !haveGIS()) return _tokenClient;
+  _tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: GOOGLE_SCOPES,
+    callback: (resp) => {}, // se sobreescribe en cada request
+    error_callback: (err) => { console.error('GIS error_callback:', err); }
+  });
+  return _tokenClient;
+}
+
+/**
+ * ensureGoogleToken({ interactive })
+ * - interactive=false → intenta recuperar token en silencio (sin prompts)
+ * - interactive=true  → puede mostrar consentimiento (úsalo en clicks del usuario)
+ */
+function ensureGoogleToken({ interactive = false } = {}) {
   return new Promise((resolve, reject) => {
-    // Guardia: client id sin poner
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com')) {
-      const msg = 'Falta GOOGLE_CLIENT_ID o no es de tipo Web (…apps.googleusercontent.com).';
-      console.error(msg);
-      alert(msg);
-      return reject(new Error(msg));
+      const msg = 'Falta GOOGLE_CLIENT_ID (tipo Web).';
+      console.error(msg); return reject(new Error(msg));
     }
-
     if (_googleAccessToken) return resolve(_googleAccessToken);
-
-    if (!window.google || !google.accounts || !google.accounts.oauth2) {
-      const msg = 'Google Identity Services no cargado. Revisa <script src="https://accounts.google.com/gsi/client"> y que no uses file://';
-      console.error(msg);
-      return reject(new Error(msg));
+    if (!haveGIS()) {
+      const msg = 'Google Identity Services no cargado.';
+      console.error(msg); return reject(new Error(msg));
     }
 
-    if (!_tokenClient) {
-      _tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: GOOGLE_SCOPES,
-        prompt: 'consent',
-        callback: (resp) => {
-          if (resp && resp.access_token) {
-            _googleAccessToken = resp.access_token;
-            return resolve(_googleAccessToken);
-          }
-          const err = resp?.error || 'Respuesta sin access_token';
-          console.error('GIS callback error:', resp);
-          alert('Error al obtener el token: ' + err);
-          reject(new Error(err));
-        },
-        error_callback: (err) => {
-  console.error('GIS error_callback:', err, 'origin:', location.origin);
-  alert('Google OAuth error:\n' + JSON.stringify(err, null, 2) + '\nOrigen: ' + location.origin);
-          reject(err);
-        }
+    const client = initTokenClient();
+    client.callback = (resp) => {
+      if (resp && resp.access_token) {
+        _googleAccessToken = resp.access_token;
+        try { ensureAutoSyncTimer(); } catch {}
+        return resolve(_googleAccessToken);
+      }
+      const err = resp?.error || 'Respuesta sin access_token';
+      reject(new Error(err));
+    };
+
+    try {
+      client.requestAccessToken({
+        prompt: interactive ? 'consent' : '' // ← silencioso si no es interactivo
       });
+    } catch (e) {
+      reject(e);
     }
-
-    // Importante: llamarlo tras un gesto del usuario (click del botón)
-    _tokenClient.requestAccessToken();
   });
 }
+
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -2967,7 +3276,7 @@ async function ensureDriveIdsForEventAttachments(localEventId){
 }
 
 async function gapiFetch(url, opts = {}, retry = 0) {
-  const token = await ensureGoogleToken();
+  const token = await ensureGoogleToken({ interactive: false });
   const doFetch = () => fetch(url, {
     ...opts,
     headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` }
@@ -3022,6 +3331,17 @@ function injectGoogleImportUI(){
   const importBtn= sec.querySelector('#gcalImportBtn');
   const pushBtn  = sec.querySelector('#gcalPushBtn');
 
+  const rememberWrap = document.createElement('label');
+rememberWrap.style.cssText='display:flex;align-items:center;gap:.5rem;margin-top:.25rem;cursor:pointer;font-size:.9rem';
+rememberWrap.innerHTML = `<input id="gcalRemember" type="checkbox"> Mantener sesión iniciada`;
+sec.appendChild(rememberWrap);
+
+const rememberChk = rememberWrap.querySelector('#gcalRemember');
+rememberChk.checked = (localStorage.getItem('google.remember') === '1');
+rememberChk.addEventListener('change', ()=> {
+  localStorage.setItem('google.remember', rememberChk.checked ? '1' : '0');
+});
+
   // dentro de injectGoogleImportUI, tras crear pushBtn:
 const autoWrap = document.createElement('label');
 autoWrap.style.cssText = 'display:flex;align-items:center;gap:.5rem;margin-top:.5rem;cursor:pointer;font-size:.9rem';
@@ -3036,46 +3356,55 @@ autoChk.addEventListener('change', () => {
 });
 
   authBtn.addEventListener('click', async () => {
-    try { await ensureGoogleToken(); alert('Conexión OK ✅'); }
-    catch (e) { console.error(e); alert('No se pudo conectar con Google'); }
-  });
+  try {
+    await ensureGoogleToken({ interactive: true });
+    alert('Conexión OK ✅');
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo conectar con Google');
+  }
+});
 
-  importBtn.addEventListener('click', async () => {
-    try {
-      importBtn.disabled = true;
-      importBtn.textContent = 'Importando… 0';
-      const { imported, duplicates, attsSaved } = await importAllFromGoogle({
-        calendarId: 'primary',
-        sinceISO: '2009-01-01T00:00:00Z',
-        onProgress: ({ imported }) => { importBtn.textContent = `Importando… ${imported}`; }
-      });
-      alert(`Importación completada.\nEventos importados: ${imported}\nDuplicados omitidos: ${duplicates}\nAdjuntos guardados: ${attsSaved}`);
-      reRender();
-    } catch (e) {
-      console.error(e);
-      alert('Hubo un problema al importar desde Google Calendar.');
-    } finally {
-      importBtn.disabled = false;
-      importBtn.textContent = 'Importar (2009 → hoy)';
-    }
-  });
+importBtn.addEventListener('click', async () => {
+  try {
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importando… 0';
+    const { imported, duplicates, attsSaved } = await importAllFromGoogle({
+      calendarId: 'primary',
+      sinceISO: '2009-01-01T00:00:00Z',
+      onProgress: ({ imported }) => { importBtn.textContent = `Importando… ${imported}`; },
+      interactive: true
+    });
+    alert(`Importación completada.\nEventos importados: ${imported}\nDuplicados omitidos: ${duplicates}\nAdjuntos guardados: ${attsSaved}`);
+    reRender();
+  } catch (e) {
+    console.error(e);
+    alert('Hubo un problema al importar desde Google Calendar.\n' + (e?.message || ''));
+  } finally {
+    importBtn.disabled = false;
+    importBtn.textContent = 'Importar (2009 → hoy)';
+  }
+});
 
-  // 👉 NUEVO: subir cambios locales a Google
-  pushBtn.addEventListener('click', async () => {
-    try {
-      pushBtn.disabled = true;
-      pushBtn.textContent = 'Sincronizando…';
-      const { created, updated, failed } = await pushAllDirtyToGoogle({ calendarId: 'primary' });
-      alert(`Sincronización terminada.\nCreados: ${created}\nActualizados: ${updated}\nFallidos: ${failed}`);
-      reRender();
-    } catch (e) {
-      console.error(e);
-      alert('No se pudo sincronizar con Google Calendar.');
-    } finally {
-      pushBtn.disabled = false;
-      pushBtn.textContent = 'Sincronizar a Google (subir cambios)';
-    }
-  });
+pushBtn.addEventListener('click', async () => {
+  try {
+    pushBtn.disabled = true;
+    pushBtn.textContent = 'Sincronizando…';
+    const { created, updated, failed } = await pushAllDirtyToGoogle({
+      calendarId: 'primary',
+      interactive: true
+    });
+    alert(`Sincronización terminada.\nCreados: ${created}\nActualizados: ${updated}\nFallidos: ${failed}`);
+    reRender();
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo sincronizar con Google Calendar.\n' + (e?.message || ''));
+  } finally {
+    pushBtn.disabled = false;
+    pushBtn.textContent = 'Sincronizar a Google (subir cambios)';
+  }
+});
+
   const delWrap = document.createElement('label');
 delWrap.style.cssText='display:flex;align-items:center;gap:.5rem;margin-top:.25rem;cursor:pointer;font-size:.9rem';
 delWrap.innerHTML = `<input id="gcalDeleteMirror" type="checkbox"> Borrar también en Google`;
@@ -3106,9 +3435,10 @@ async function importAllFromGoogle({
   calendarId = 'primary',
   sinceISO = '2009-01-01T00:00:00Z',
   horizonYears = 2,          // ← cuantos años hacia adelante traemos
-  onProgress
+  onProgress,
+  interactive = false   // ← nuevo
 } = {}) {
-  await ensureGoogleToken();
+  await ensureGoogleToken({ interactive });
 
   let pageToken = null;
   let imported = 0, duplicates = 0, attsSaved = 0;
@@ -3334,7 +3664,10 @@ async function deleteRemoteEventIfLinked(localEvtOrId, { calendarId='primary' } 
   if (!e) return false;
   const remoteId = getRemoteIdForEvent(e);
   if (!remoteId) return false;
-  await ensureGoogleToken();
+
+  // aquí queremos poder mostrar el prompt si hace falta
+  await ensureGoogleToken({ interactive: true });
+
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(remoteId)}`;
   const res = await gapiFetch(url, { method:'DELETE' });
   if (res.status !== 204 && !res.ok) throw new Error('No se pudo borrar en Google');
@@ -3377,8 +3710,13 @@ async function pushEventToGCal(localEvent, calendarId='primary'){
 }
 
 
-async function pushAllDirtyToGoogle({ calendarId='primary', quiet=false } = {}){
-  await ensureGoogleToken();
+async function pushAllDirtyToGoogle({
+  calendarId = 'primary',
+  quiet = false,
+  interactive = false
+} = {}) {
+  // pedir token respetando modo
+  await ensureGoogleToken({ interactive });
 
   const dirty = [];
   await tx(['events'], 'readonly', (store) => {
@@ -3489,13 +3827,29 @@ function setAutoSyncEnabled(on){
 }
 
 function ensureAutoSyncTimer(){
+  // NO toques _nowLineTimer aquí
   clearInterval(_autoSyncTimer);
+
   const enabled = localStorage.getItem('autoSync.enabled') === '1';
   if (!enabled) return;
+
+  if (!_googleAccessToken) {
+    reauthGoogleSilentIfRemembered().catch(()=>{});
+  }
+
   _autoSyncTimer = setInterval(async () => {
-    try { await pushAllDirtyToGoogle({ calendarId: 'primary' }); }
-    catch (e) { console.debug('Auto-sync: sin cambios o sin conexión'); }
-  }, 3 * 60 * 1000); // cada 3 minutos
+    try { await pushAllDirtyToGoogle({ calendarId: 'primary' }); } catch {}
+  }, 3 * 60 * 1000);
+}
+
+async function reauthGoogleSilentIfRemembered(){
+  if (localStorage.getItem('google.remember') !== '1') return;
+  try {
+    await ensureGoogleToken({ interactive: false });
+  } catch (e) {
+    // Si no hay sesión válida en cookies de Google, no molestamos al usuario.
+    console.info('Silent auth falló (no sesión):', e?.error || e);
+  }
 }
 
 /* ---------- (Opcional) Importar de todos tus calendarios, no solo "primary" ----------
@@ -3546,6 +3900,9 @@ function applyTheme(theme) {
   injectMonthPickerStyles();
   ensureMonthPickerUI();
   hideLegacyNavArrows();
+  injectMonthDensityStyles();
+  applyMonthDensity();
+  ensurePreviewCleanupOnce(); 
 
 // botón/gesto para abrirlo
 on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); });
@@ -3575,11 +3932,15 @@ on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); 
 
   if (action === 'new') openSheetNew();
   injectGoogleImportUI();
+  ensureCategoryUI();  
   injectDrawerVersion();
   ensureSWUpdatePrompt();
   ensureAutoSyncTimer();
+
+  await reauthGoogleSilentIfRemembered(); // 👈 intenta recuperar token sin prompts
+  ensureAutoSyncTimer();                  // arrancará si hay token + autosync activado
   await checkForcedUpdate();                          // al cargar
-document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña
+  document.addEventListener('visibilitychange', ()=>{ // al volver a la pestaña
   if (document.visibilityState === 'visible') checkForcedUpdate();
 });
 setInterval(checkForcedUpdate, 6 * 60 * 60 * 1000); // cada 6h
