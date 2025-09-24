@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.7';
+window.__APP_VERSION__ = '1.1.8';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2307,6 +2307,7 @@ function ensureMonthPickerUI(){
     document.body.appendChild(overlay);
   }
 
+
   // 2) Botón al lado del título — idempotente y con auto-reparación
   const currentLabel = (() => {
     const d = state?.currentMonth || new Date();
@@ -2342,6 +2343,59 @@ function ensureMonthPickerUI(){
   return overlay;
 }
 
+  function injectTagsV2HardReset(){
+  if (document.getElementById('tags-v2-hard-reset')) return;
+  const css = `
+  /* Neutraliza cualquier estilo heredado de la versión anterior */
+  body.tags-v2 .calendar-grid .day .events-tags .event-tag,
+  body.tags-v2 .events-tags .event-tag{
+    background:transparent !important;
+    border:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+    font:inherit !important;
+    letter-spacing:normal !important;
+    text-decoration:none !important;
+  }
+  body.tags-v2 .calendar-grid .day .events-tags .event-tag::after,
+  body.tags-v2 .events-tags .event-tag::after{
+    content:none !important;
+    display:none !important;
+  }
+  /* “Blindamos” el texto para evitar hacks viejos tipo font-size:0 */
+  body.tags-v2 .events-tags .event-tag .etxt{
+    display:inline-block !important;
+    max-width:100% !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    font-size:12px !important;
+    line-height:15px !important;
+    vertical-align:top;
+  }
+  /* Barrita de color a la izquierda (se apoya en --tag-color que ya defines) */
+  body.tags-v2 .events-tags .event-tag::before{
+    content:""; display:inline-block; flex:0 0 3px; width:3px; height:15px;
+    border-radius:2px; transform:translateY(1px);
+    background:var(--tag-color, #60a5fa) !important;
+  }
+
+  /* Matiz de line-height en iOS para evitar recorte vertical */
+  html[data-platform="ios"] body.tags-v2 .events-tags .event-tag .etxt{ line-height:16px !important; }
+
+  /* Colores por categoría (coinciden con tus nuevas variables) */
+  body.tags-v2 .event-tag.cat-Trabajo{     --tag-color:#167EE6; }
+  body.tags-v2 .event-tag.cat-Tarea{       --tag-color:#16a34a; }
+  body.tags-v2 .event-tag.cat-Citas{       --tag-color:#f59e0b; }
+  body.tags-v2 .event-tag.cat-Cumpleaños{  --tag-color:#a855f7; }
+  body.tags-v2 .event-tag.cat-Otros{       --tag-color:#64748b; }
+  body.tags-v2 .event-tag.cat-Festivo{     --tag-color:#0ea5e9; }
+  `;
+  const st = document.createElement('style');
+  st.id = 'tags-v2-hard-reset';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
 // —— Estado del month picker infinito ——
 const mpState = {
   inited: false,
@@ -2833,6 +2887,13 @@ function hideLegacyNavArrows(){
     if ('disabled' in el) el.disabled = true;
     try { el.inert = true; } catch {}
   });
+}
+
+function setPlatformClass() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iP(hone|ad|od)/.test(ua) || ((/Macintosh/.test(ua)) && 'ontouchend' in document);
+  const isAndroid = /Android/i.test(ua);
+  document.documentElement.setAttribute('data-platform', isIOS ? 'ios' : (isAndroid ? 'android' : 'other'));
 }
 
 // ===================== Listeners (generales) =====================
@@ -4028,13 +4089,19 @@ function applyTheme(theme) {
   injectToastStyles();
   injectAgendaStyles();
   injectSearchFullStyles();
+  setPlatformClass();                 // 👈 NUEVO
+injectTagsV2HardReset();
   ensureSearchFullUI();
   injectMonthPickerStyles();
   ensureMonthPickerUI();
   hideLegacyNavArrows();
   injectMonthDensityStyles();
   injectMonthLightStyles();
+  if (document.body) {
   document.body.classList.add('tags-v2');
+} else {
+  window.addEventListener('DOMContentLoaded', () => document.body.classList.add('tags-v2'), { once:true });
+}
 
   // light por defecto y vista “expandida” (solo títulos, como en la foto)
 state.theme = localStorage.getItem('theme') || 'light';
