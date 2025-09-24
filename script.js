@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.4';
+window.__APP_VERSION__ = '1.1.5';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2106,35 +2106,51 @@ function injectAgendaStyles(){
 function injectMonthDensityStyles(){
   if (document.getElementById('month-density-css')) return;
   const css = `
-  /* Contenedor de tags en columna */
-  .events-tags{ display:flex; flex-direction:column; gap:3px }
-
-  /* ===== MODO COMPACTO: barrita + iniciales ===== */
-  body.month-compact .event-tag{
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    height: 16px;
-    padding: 0 .4rem;
-    border-radius: 10px;
-    overflow: hidden;
-    font-size: 0;            /* ocultamos el texto largo */
-    line-height: 16px;
-  }
-  body.month-compact .event-tag::after{
-    content: attr(data-abbr); /* ← usamos las iniciales del atributo */
-    font-size: .72rem;
-    font-weight: 700;
-    letter-spacing: .02em;
-    text-transform: uppercase;
+  /* Contenedor de líneas por día */
+  .events-tags{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
   }
 
-  /* ===== MODO EXPANDIDO (como ya estaba) ===== */
-  body.month-expanded .event-tag{
-    display:block; height:18px; padding:0 .45rem; border-radius:10px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    font-size:.78rem; line-height:18px;
+  /* Estilo común: línea vertical + texto en una sola línea con ellipsis */
+  .event-tag{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    background:transparent !important;
+    border:0 !important;
+    padding:0;
+    margin:0;
+    font-size:11px;        /* texto más pequeño */
+    line-height:14px;
+    font-weight:500;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    min-width:0;
+    max-width:100%;
   }
+  .event-tag::before{
+    content:"";
+    flex:0 0 3px;          /* grosor de la línea */
+    height:14px;           /* igual que la line-height */
+    border-radius:2px;
+    background: var(--tag-color, #60a5fa);
+    transform: translateY(1px);
+  }
+
+  /* Colores por categoría (puedes ajustar a tu paleta) */
+  .event-tag.cat-Trabajo{     --tag-color:#167EE6; } /* azul (cambiado desde rojo) */
+  .event-tag.cat-Tarea{       --tag-color:#16a34a; }
+  .event-tag.cat-Citas{       --tag-color:#f59e0b; }
+  .event-tag.cat-Cumpleaños{  --tag-color:#a855f7; }
+  .event-tag.cat-Otros{       --tag-color:#64748b; }
+  .event-tag.cat-Festivo{     --tag-color:#0ea5e9; }
+
+  /* Opcional: resaltar hoy un poquito */
+  .day.today .event-tag{ font-weight:600; }
   `;
   const st = document.createElement('style');
   st.id = 'month-density-css';
