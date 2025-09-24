@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1,0';
+window.__APP_VERSION__ = '1.1,1';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -32,13 +32,8 @@ function showUpdateGate(minReq, latest, notes){
   if (!gate) { console.warn('Falta #updateGate en el DOM'); return; }
   if (gate.parentNode !== document.body) document.body.appendChild(gate);
 
-  // 👉 si #updateGate NO está colgado directamente del <body>, muévelo
-  if (gate && gate.parentNode !== document.body) {
-    document.body.appendChild(gate);
-  }
-
-  qs('#currentVer').textContent  = `Actual: ${window.__APP_VERSION__}`;
-  qs('#requiredVer').textContent = `Requerida: ${minReq}`;
+  qs('#currentVer')?.textContent  = `Actual: ${window.__APP_VERSION__}`;
+qs('#requiredVer')?.textContent = `Requerida: ${minReq}`;
 
   const link = qs('#releaseNotesLink');
   if (link) {
@@ -750,6 +745,7 @@ async function loadMonthEvents(year, month) {
 // ===================== Vistas de tiempo =====================
 function setViewMode(mode) {
   state.viewMode = mode;
+  document.body.classList.toggle('view-month', mode === 'month');
   $$('input[name="viewMode"]').forEach(r => { r.checked = (r.value === mode); });
 
   if (mode === 'month') {
@@ -1948,7 +1944,11 @@ function injectEnhancementStyles(){
   .search-results mark{ background: rgba(14,165,233,.22); color: inherit; padding:0 .08em; border-radius:.2em }
 
   #calendarGrid, #timeGrid, #timeDaysHeader, #monthView, #timeView, .day-col { touch-action: pan-y; }
-  `;
+  /* En la vista de mes, no dejamos que el navegador “se lleve” el gesto vertical.
+     Así nuestro JS puede decidir expandir/compactar sin que el grid haga scroll. */
+  body.view-month #calendarGrid { touch-action: pan-x; }
+`;
+  
   const st = document.createElement('style');
   st.id = 'cal-enhance-styles';
   st.textContent = css;
@@ -2966,14 +2966,18 @@ function addSwipeNavigation(){
   };
 
   const onPointerMove = (e)=>{
-    if (!touch.active || (e.pointerId !== touch.id)) return;
-    const dx = e.clientX - touch.startX;
-    const dy = e.clientY - touch.startY;
-    // Bloquea el scroll vertical solo si el gesto es claramente horizontal
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10){
-      e.preventDefault();
-    }
-  };
+  if (!touch.active || (e.pointerId !== touch.id)) return;
+  const dx = e.clientX - touch.startX;
+  const dy = e.clientY - touch.startY;
+
+  // Gesto horizontal claro → bloqueo scroll
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10){
+    e.preventDefault();
+  // Gesto vertical claro (solo en vista mes) → bloqueo scroll para poder togglear densidad
+  } else if (state.viewMode === 'month' && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10){
+    e.preventDefault(); // ⬅️ NUEVO
+  }
+};
 
   const onPointerUp = (e)=>{
     if (!touch.active || (e.pointerId !== touch.id)) return;
@@ -3014,26 +3018,39 @@ if (dt < MAX_DT) {
       touch.active = true; touch.startX = t.clientX; touch.startY = t.clientY; touch.startTime = Date.now();
     };
     const onMove = (e)=>{
-      if (!touch.active) return;
-      const t = e.touches[0];
-      const dx = t.clientX - touch.startX;
-      const dy = t.clientY - touch.startY;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) e.preventDefault();
-    };
-    const onEnd = (e)=>{
-      if (!touch.active) return;
-      const t = e.changedTouches && e.changedTouches[0];
-      const endX = t ? t.clientX : touch.startX;
-      const endY = t ? t.clientY : touch.startY;
-      const dx = endX - touch.startX;
-      const dy = endY - touch.startY;
-      const dt = Date.now() - touch.startTime;
-      touch.active = false;
-      const THRESHOLD = 60, SLOPE = 1.2;
-      if (dt < 600 && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE) {
-        dx < 0 ? swipeNext() : swipePrev();
-      }
-    };
+  if (!touch.active) return;
+  const t = e.touches[0];
+  const dx = t.clientX - touch.startX;
+  const dy = t.clientY - touch.startY;
+
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+    e.preventDefault();                            // horizontal
+  } else if (state.viewMode === 'month' && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+    e.preventDefault();                            // ⬅️ NUEVO: vertical en mes
+  }
+};
+
+const onEnd = (e)=>{
+  if (!touch.active) return;
+  const t = e.changedTouches && e.changedTouches[0];
+  const endX = t ? t.clientX : touch.startX;
+  const endY = t ? t.clientY : touch.startY;
+  const dx = endX - touch.startX;
+  const dy = endY - touch.startY;
+  const dt = Date.now() - touch.startTime;
+  touch.active = false;
+
+  const THRESHOLD = 60, SLOPE = 1.2;
+  const horiz = dt < 600 && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE;
+  const vert  = dt < 600 && Math.abs(dy) > THRESHOLD && Math.abs(dy) > Math.abs(dx)*SLOPE;
+
+  if (horiz) {
+    dx < 0 ? swipeNext() : swipePrev();
+  } else if (vert && state.viewMode === 'month') {
+    dy > 0 ? setMonthDensity('expanded') : setMonthDensity('compact'); // ⬅️ NUEVO
+  }
+};
+
     targets.forEach(el=>{
       el.addEventListener('touchstart', onStart, { passive:true,  capture:true });
       el.addEventListener('touchmove',  onMove,  { passive:false, capture:true });
