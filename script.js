@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.6';
+window.__APP_VERSION__ = '1.1.7';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -1391,6 +1391,48 @@ function injectAttachmentViewerStyles(){
   const st = document.createElement('style');
   st.id = 'att-viewer-css';
   st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function injectMonthLightStyles(){
+  if (document.getElementById('month-light-css')) return;
+  const css = `
+  /* ====== MES con etiquetas estilo Google (light) ====== */
+  body.tags-v2 .events-tags{
+    display:flex; flex-direction:column; gap:2px; min-width:0;
+  }
+  body.tags-v2 .events-tags .event-tag{
+    display:flex; align-items:flex-start; gap:6px;
+    background:transparent !important; border:0 !important; padding:0 !important; margin:0 !important;
+    font-size:12px !important; line-height:15px; font-weight:600;
+    color:#111 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:100%; min-width:0; cursor:pointer;
+  }
+  /* MUY IMPORTANTE: anula los "dos puntitos" heredados */
+  body.tags-v2 .events-tags .event-tag::after{ content:none !important; }
+
+  /* barrita izquierda */
+  body.tags-v2 .events-tags .event-tag::before{
+    content:""; display:inline-block; flex:0 0 3px; width:3px; height:15px; border-radius:2px;
+    background:var(--tag-color, #1a73e8);
+  }
+  body.tags-v2 .events-tags .event-tag .etxt{ display:inline-block; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* Colores por categoría (el azul como en la captura) */
+  body.tags-v2 .event-tag.cat-Trabajo     { --tag-color:#1a73e8; }
+  body.tags-v2 .event-tag.cat-Tarea       { --tag-color:#188038; }
+  body.tags-v2 .event-tag.cat-Citas       { --tag-color:#ea8600; }
+  body.tags-v2 .event-tag.cat-Cumpleaños  { --tag-color:#9334e6; }
+  body.tags-v2 .event-tag.cat-Otros       { --tag-color:#5f6368; }
+  body.tags-v2 .event-tag.cat-Festivo     { --tag-color:#0ea5e9; }
+
+  /* Fondo claro del calendario (si tu tema light no lo hace ya) */
+  [data-theme="light"] .calendar-grid .day{ background:#fff; border:1px solid #e6e9ef; }
+  [data-theme="light"] .calendar-grid .day.today{ outline:2px solid #1a73e8; outline-offset:-2px; }
+  `;
+  const st = document.createElement('style');
+  st.id = 'month-light-css'; st.textContent = css;
   document.head.appendChild(st);
 }
 
@@ -3991,9 +4033,16 @@ function applyTheme(theme) {
   ensureMonthPickerUI();
   hideLegacyNavArrows();
   injectMonthDensityStyles();
-  applyMonthDensity();
+  injectMonthLightStyles();
   document.body.classList.add('tags-v2');
+
+  // light por defecto y vista “expandida” (solo títulos, como en la foto)
+state.theme = localStorage.getItem('theme') || 'light';
+applyTheme(state.theme);
+state.monthDensity = localStorage.getItem('month.density') || 'expanded';
+  applyMonthDensity();
   ensurePreviewCleanupOnce(); 
+
 
 // botón/gesto para abrirlo
 on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); });
