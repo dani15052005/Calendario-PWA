@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1,1';
+window.__APP_VERSION__ = '1.1.3';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -19,21 +19,48 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 function cmpSemver(a,b){
-  const pa = String(a).split('.').map(n=>parseInt(n||0,10));
-  const pb = String(b).split('.').map(n=>parseInt(n||0,10));
-  for (let i=0;i<3;i++){ const da=(pa[i]||0)-(pb[i]||0); if (da) return Math.sign(da); }
+  const norm = (v) =>
+    String(v).trim()
+      .replace(/[,]+/g, '.')          // comas → puntos
+      .replace(/[^0-9.]/g, '')        // quita raros
+      .split('.').slice(0,3)
+      .map(n => parseInt(n || 0, 10));
+
+  const pa = norm(a), pb = norm(b);
+  for (let i=0;i<3;i++){
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return Math.sign(d);
+  }
   return 0;
 }
+
 function qs(el){ return document.querySelector(el); }
 
 function showUpdateGate(minReq, latest, notes){
-  document.body.classList.add('update-block');
-  const gate = qs('#updateGate');
-  if (!gate) { console.warn('Falta #updateGate en el DOM'); return; }
-  if (gate.parentNode !== document.body) document.body.appendChild(gate);
+  let gate = qs('#updateGate');
+  if (!gate) {
+    // si no existe, crea un gate mínimo para no dejar el body bloqueado “a ciegas”
+    gate = document.createElement('div');
+    gate.id = 'updateGate';
+    gate.className = 'update-gate';
+    gate.innerHTML = `
+      <div class="card">
+        <h3>Actualización requerida</h3>
+        <p id="currentVer"></p>
+        <p id="requiredVer"></p>
+        <a id="releaseNotesLink" href="#" style="display:none">Notas de versión</a>
+        <button id="updateNowBtn" class="btn primary">Actualizar</button>
+      </div>`;
+    document.body.appendChild(gate);
+  }
 
-  qs('#currentVer')?.textContent  = `Actual: ${window.__APP_VERSION__}`;
-qs('#requiredVer')?.textContent = `Requerida: ${minReq}`;
+  document.body.classList.add('update-block');
+
+  const elCur = qs('#currentVer');
+if (elCur) elCur.textContent = `Actual: ${window.__APP_VERSION__}`;
+
+const elReq = qs('#requiredVer');
+if (elReq) elReq.textContent = `Requerida: ${minReq}`;
 
   const link = qs('#releaseNotesLink');
   if (link) {
