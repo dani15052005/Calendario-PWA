@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.3';
+window.__APP_VERSION__ = '1.1.4';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -716,6 +716,8 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
       tag.className = `event-tag cat-${evt.category}`;
+      const abbr = (evt.title || '').trim().slice(0, 3).toUpperCase();
+      tag.setAttribute('data-abbr', abbr);
       const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
       tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title}`;
 
@@ -733,18 +735,42 @@ tag.textContent = `${timeLabel ? timeLabel + ' ' : ''}${evt.title}`;
 
 async function handleDayCellClick(d){
   const ds = ymd(d);
-  // Leer eventos del día y filtrar por categorías visibles
-  const list = (await getEventsByDate(ds))
-    .filter(ev => state.filters.has(ev.category));
 
-  if (list.length >= 2){
-    // Menú para elegir
+  // 1) Eventos guardados para ese día (filtrados por categoría visible)
+  let list = (await getEventsByDate(ds)).filter(ev => state.filters.has(ev.category));
+
+  // 2) Si es festivo y el filtro lo permite, añadimos un stub para que se vea en el modal
+  const holName = getNationalHolidaysMap(d.getFullYear()).get(ds);
+  if (holName && state.filters.has('Festivo')) {
+    list.unshift({
+      id: `holiday:${ds}`,
+      date: ds,
+      time: '00:00',
+      title: `🎉 ${holName}`,
+      location: '',
+      client: '',
+      category: 'Festivo',
+      categoryOther: '',
+      monthKey: ds.slice(0,7),
+      createdAt: 0,
+      allDay: true,
+      startDate: ds, startTime: '00:00',
+      endDate: ds,   endTime: '23:59'
+    });
+  }
+
+  // 3) Comportamiento:
+  // - Si hay varios → lista/agenda
+  // - Si hay uno y es festivo → también lista (no abrimos editor de un stub)
+  // - Si hay uno normal → abrir editor
+  // - Si no hay nada → ir a vista de día
+  if (list.length >= 2) {
     showDayAgenda(d, list);
-  } else if (list.length === 1){
-    // Ir directo al evento
-    openSheetForEdit(list[0]);
+  } else if (list.length === 1) {
+    (list[0].category === 'Festivo')
+      ? showDayAgenda(d, list)
+      : openSheetForEdit(list[0]);
   } else {
-    // Sin eventos → abre la vista de día como antes
     state.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     setViewMode('day');
   }
@@ -2080,16 +2106,30 @@ function injectAgendaStyles(){
 function injectMonthDensityStyles(){
   if (document.getElementById('month-density-css')) return;
   const css = `
-  /* Contenedor de tags: columna con un poco de aire */
+  /* Contenedor de tags en columna */
   .events-tags{ display:flex; flex-direction:column; gap:3px }
 
-  /* ====== MODO COMPACTO (solo barrita de color) ====== */
+  /* ===== MODO COMPACTO: barrita + iniciales ===== */
   body.month-compact .event-tag{
-    display:block; height:6px; padding:0; border-radius:5px;
-    font-size:0; line-height:0; overflow:hidden; /* oculta cualquier texto */
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 16px;
+    padding: 0 .4rem;
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 0;            /* ocultamos el texto largo */
+    line-height: 16px;
+  }
+  body.month-compact .event-tag::after{
+    content: attr(data-abbr); /* ← usamos las iniciales del atributo */
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
   }
 
-  /* ====== MODO EXPANDIDO (píldora con texto truncado) ====== */
+  /* ===== MODO EXPANDIDO (como ya estaba) ===== */
   body.month-expanded .event-tag{
     display:block; height:18px; padding:0 .45rem; border-radius:10px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -3000,10 +3040,7 @@ function addSwipeNavigation(){
   // Gesto horizontal claro → bloqueo scroll
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10){
     e.preventDefault();
-  // Gesto vertical claro (solo en vista mes) → bloqueo scroll para poder togglear densidad
-  } else if (state.viewMode === 'month' && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10){
-    e.preventDefault(); // ⬅️ NUEVO
-  }
+  } 
 };
 
   const onPointerUp = (e)=>{
@@ -3016,16 +3053,8 @@ function addSwipeNavigation(){
     const THRESHOLD = 60, SLOPE = 1.2, MAX_DT = 600;
 if (dt < MAX_DT) {
   const horiz = Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE;
-  const vert  = Math.abs(dy) > THRESHOLD && Math.abs(dy) > Math.abs(dx)*SLOPE;
-
-  if (horiz) {
-    dx < 0 ? swipeNext() : swipePrev();
-  } else if (vert && state.viewMode === 'month') {
-    // ↓ expande (píldoras con texto) · ↑ compacta (barritas)
-    dy > 0 ? setMonthDensity('expanded') : setMonthDensity('compact');
-  }
+  if (horiz) { dx < 0 ? swipeNext() : swipePrev(); }
 }
-
   };
 
   const onPointerCancel = ()=>{ touch.active = false; touch.id = null; };
@@ -3052,8 +3081,6 @@ if (dt < MAX_DT) {
 
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
     e.preventDefault();                            // horizontal
-  } else if (state.viewMode === 'month' && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
-    e.preventDefault();                            // ⬅️ NUEVO: vertical en mes
   }
 };
 
@@ -3069,13 +3096,7 @@ const onEnd = (e)=>{
 
   const THRESHOLD = 60, SLOPE = 1.2;
   const horiz = dt < 600 && Math.abs(dx) > THRESHOLD && Math.abs(dx) > Math.abs(dy)*SLOPE;
-  const vert  = dt < 600 && Math.abs(dy) > THRESHOLD && Math.abs(dy) > Math.abs(dx)*SLOPE;
-
-  if (horiz) {
-    dx < 0 ? swipeNext() : swipePrev();
-  } else if (vert && state.viewMode === 'month') {
-    dy > 0 ? setMonthDensity('expanded') : setMonthDensity('compact'); // ⬅️ NUEVO
-  }
+if (horiz) { dx < 0 ? swipeNext() : swipePrev(); }
 };
 
     targets.forEach(el=>{

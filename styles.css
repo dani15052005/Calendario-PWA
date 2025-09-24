@@ -1146,3 +1146,12 @@ select option:disabled{
   max-height: none !important;
   overflow: visible !important;
 }
+
+/* Azul para la categoría Trabajo */
+.event-tag.cat-Trabajo,
+.pill.cat-Trabajo,
+.ag-item.cat-Trabajo,
+.sf-item.cat-Trabajo {
+  background: #3b82f6 !important; /* azul */
+  color: #fff !important;          /* texto en blanco para buen contraste */
+}
