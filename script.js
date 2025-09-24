@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.5';
+window.__APP_VERSION__ = '1.1.6';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -715,19 +715,33 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
-      tag.className = `event-tag cat-${evt.category}`;
-      const abbr = (evt.title || '').trim().slice(0, 3).toUpperCase();
-      tag.setAttribute('data-abbr', abbr);
-      const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
-      tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title}`;
+tag.className = `event-tag cat-${evt.category}`;
 
-      // ⬇ aquí va el cambio de 3.7, PERO DENTRO del bucle
-      const showTitleOnly = (state.monthDensity === 'expanded'); // título sin hora en modo expandido
+// (opcional) fuera: no uses data-abbr para evitar CSS heredado que lo mostraba en ::after
+// tag.setAttribute('data-abbr', abbr);  // ← quítalo
+
+const showTitleOnly = (state.monthDensity === 'expanded');
 const timeLabel = (showTitleOnly || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
-tag.textContent = `${timeLabel ? timeLabel + ' ' : ''}${evt.title}`;
+const label = `${timeLabel ? timeLabel + ' ' : ''}${evt.title || ''}`;
 
+// mete el texto en un span para “blindarlo” frente a estilos viejos
+const spanTxt = document.createElement('span');
+spanTxt.className = 'etxt';
+spanTxt.textContent = label;
+tag.appendChild(spanTxt);
 
-      box.append(tag);
+const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title || ''}`;
+
+// ¡clicable!
+tag.setAttribute('role','button');
+tag.tabIndex = 0;
+tag.addEventListener('click', (ev)=>{ ev.stopPropagation(); openSheetForEdit(evt); });
+tag.addEventListener('keydown', (ev)=>{ 
+  if (ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); openSheetForEdit(evt); }
+});
+
+box.append(tag);
     }
   }
 });
@@ -2106,51 +2120,46 @@ function injectAgendaStyles(){
 function injectMonthDensityStyles(){
   if (document.getElementById('month-density-css')) return;
   const css = `
-  /* Contenedor de líneas por día */
-  .events-tags{
-    display:flex;
-    flex-direction:column;
-    gap:2px;
-    min-width:0;
+  /* Activaremos esto con body.tags-v2 para ganar especificidad y anular estilos viejos */
+  body.tags-v2 .events-tags{
+    display:flex; flex-direction:column; gap:2px; min-width:0;
   }
 
-  /* Estilo común: línea vertical + texto en una sola línea con ellipsis */
-  .event-tag{
-    display:flex;
-    align-items:flex-start;
-    gap:6px;
-    background:transparent !important;
-    border:0 !important;
-    padding:0;
-    margin:0;
-    font-size:11px;        /* texto más pequeño */
-    line-height:14px;
+  body.tags-v2 .events-tags .event-tag{
+    display:flex; align-items:flex-start; gap:6px;
+    background:transparent !important; border:0 !important;
+    padding:0 !important; margin:0 !important;
+    font-size:11px !important; line-height:14px;
     font-weight:500;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    min-width:0;
-    max-width:100%;
+    color:var(--text,#e6ecff) !important;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:100%; min-width:0;
+    cursor:pointer;                           /* clickable */
   }
-  .event-tag::before{
-    content:"";
-    flex:0 0 3px;          /* grosor de la línea */
-    height:14px;           /* igual que la line-height */
-    border-radius:2px;
+  /* Anula cualquier “after” antiguo que metiera siglas/abbrevs */
+  body.tags-v2 .events-tags .event-tag::after{ content:none !important; }
+
+  body.tags-v2 .events-tags .event-tag::before{
+    content:""; display:inline-block;
+    flex:0 0 3px; width:3px; height:14px;     /* misma altura que la línea */
+    border-radius:2px; transform:translateY(1px);
     background: var(--tag-color, #60a5fa);
-    transform: translateY(1px);
+  }
+  /* El texto dentro (lo metemos en un span) para evitar hacks viejos tipo font-size:0 */
+  body.tags-v2 .events-tags .event-tag .etxt{
+    display:inline-block; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
 
-  /* Colores por categoría (puedes ajustar a tu paleta) */
-  .event-tag.cat-Trabajo{     --tag-color:#167EE6; } /* azul (cambiado desde rojo) */
-  .event-tag.cat-Tarea{       --tag-color:#16a34a; }
-  .event-tag.cat-Citas{       --tag-color:#f59e0b; }
-  .event-tag.cat-Cumpleaños{  --tag-color:#a855f7; }
-  .event-tag.cat-Otros{       --tag-color:#64748b; }
-  .event-tag.cat-Festivo{     --tag-color:#0ea5e9; }
+  /* Colores por categoría */
+  body.tags-v2 .event-tag.cat-Trabajo{     --tag-color:#167EE6; }
+  body.tags-v2 .event-tag.cat-Tarea{       --tag-color:#16a34a; }
+  body.tags-v2 .event-tag.cat-Citas{       --tag-color:#f59e0b; }
+  body.tags-v2 .event-tag.cat-Cumpleaños{  --tag-color:#a855f7; }
+  body.tags-v2 .event-tag.cat-Otros{       --tag-color:#64748b; }
+  body.tags-v2 .event-tag.cat-Festivo{     --tag-color:#0ea5e9; }
 
-  /* Opcional: resaltar hoy un poquito */
-  .day.today .event-tag{ font-weight:600; }
+  .day.today body.tags-v2 .event-tag{ font-weight:600; }
   `;
   const st = document.createElement('style');
   st.id = 'month-density-css';
@@ -3983,6 +3992,7 @@ function applyTheme(theme) {
   hideLegacyNavArrows();
   injectMonthDensityStyles();
   applyMonthDensity();
+  document.body.classList.add('tags-v2');
   ensurePreviewCleanupOnce(); 
 
 // botón/gesto para abrirlo
