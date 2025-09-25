@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.1.8';
+window.__APP_VERSION__ = '1.2.0';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -1436,6 +1436,47 @@ function injectMonthLightStyles(){
   document.head.appendChild(st);
 }
 
+function enforceTagPillsSkin(){
+  // 1) quita CSS que pisa la píldora
+  document.getElementById('tags-v2-hard-reset')?.remove();
+  document.getElementById('month-density-css')?.remove();
+  document.getElementById('month-light-css')?.remove();
+
+  // 2) refuerza la píldora (con !important para ganar a cualquier resto)
+  if (document.getElementById('tags-pill-override')) return;
+  const css = `
+    body.tags-v2 .events-tags{ display:flex; flex-wrap:wrap; gap:4px; align-content:flex-start; min-width:0 }
+    body.tags-v2 .events-tags .event-tag{
+      display:inline-flex; align-items:center; max-width:100%; box-sizing:border-box;
+      padding:2px 8px !important; border-radius:999px !important;
+      background:var(--tag-bg, rgba(0,0,0,.06)) !important;
+      border:1px solid var(--tag-border, rgba(0,0,0,.12)) !important;
+      color:var(--tag-fg, #111) !important; font-size:12px; line-height:16px; font-weight:700;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+    }
+    body.tags-v2 .events-tags .event-tag::before,
+    body.tags-v2 .events-tags .event-tag::after{ content:none !important; }
+    body.tags-v2 .events-tags .event-tag .etxt{ min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+    /* Colores por categoría */
+    body.tags-v2 .event-tag.cat-Trabajo    { --tag-bg:#e8f0fe; --tag-border:#c7d2fe; --tag-fg:#174ea6; }
+    body.tags-v2 .event-tag.cat-Tarea      { --tag-bg:#e6f4ea; --tag-border:#c7e3cf; --tag-fg:#0d652d; }
+    body.tags-v2 .event-tag.cat-Citas      { --tag-bg:#fef7e0; --tag-border:#fde68a; --tag-fg:#8a4b00; }
+    body.tags-v2 .event-tag.cat-Cumpleaños { --tag-bg:#f3e8ff; --tag-border:#e9d5ff; --tag-fg:#6b21a8; }
+    body.tags-v2 .event-tag.cat-Otros      { --tag-bg:#eef2f7; --tag-border:#e5e7eb; --tag-fg:#334155; }
+    body.tags-v2 .event-tag.cat-Festivo    { --tag-bg:#e0f2fe; --tag-border:#bae6fd; --tag-fg:#075985; }
+
+    /* Tema oscuro: fondo neutro, texto claro */
+    [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
+      --tag-bg: rgba(255,255,255,.08); --tag-border: rgba(255,255,255,.16); --tag-fg:#e6ecff;
+    }
+  `;
+  const st = document.createElement('style');
+  st.id = 'tags-pill-override';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
 function ensureAttachmentViewerUI(){
   let dlg = document.getElementById('attViewer');
   if (dlg) return dlg;
@@ -2396,6 +2437,91 @@ function ensureMonthPickerUI(){
   st.textContent = css;
   document.head.appendChild(st);
 }
+
+function injectHorizontalTagPills(){
+  if (document.getElementById('tags-pill-css')) return;
+  const css = `
+  /* Contenedor de tags: en horizontal, con salto a la siguiente línea */
+  body.tags-v2 .events-tags{
+    display:flex; flex-direction:row; flex-wrap:wrap;
+    gap:4px; align-content:flex-start; min-width:0;
+  }
+
+  /* Píldora: inline-flex, texto elíptico y SIN pseudo-elementos */
+  body.tags-v2 .events-tags .event-tag{
+    display:inline-flex; align-items:center;
+    max-width:100%; min-width:0; box-sizing:border-box;
+    padding:2px 8px; border-radius:999px;
+    background:var(--tag-bg, rgba(0,0,0,.06));
+    border:1px solid var(--tag-border, rgba(0,0,0,.12));
+    color:var(--tag-fg, #111) !important;
+    font-size:12px; line-height:16px; font-weight:700;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    cursor:pointer;
+  }
+  body.tags-v2 .events-tags .event-tag::before,
+  body.tags-v2 .events-tags .event-tag::after{ content:none !important; }
+
+  /* El texto va “blindado” dentro y nunca se sale */
+  body.tags-v2 .events-tags .event-tag .etxt{
+    display:inline-block; min-width:0; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+
+  /* Colores por categoría (light) */
+  body.tags-v2 .event-tag.cat-Trabajo    { --tag-bg:#e8f0fe; --tag-border:#c7d2fe; --tag-fg:#174ea6; }
+  body.tags-v2 .event-tag.cat-Tarea      { --tag-bg:#e6f4ea; --tag-border:#c7e3cf; --tag-fg:#0d652d; }
+  body.tags-v2 .event-tag.cat-Citas      { --tag-bg:#fef7e0; --tag-border:#fde68a; --tag-fg:#8a4b00; }
+  body.tags-v2 .event-tag.cat-Cumpleaños { --tag-bg:#f3e8ff; --tag-border:#e9d5ff; --tag-fg:#6b21a8; }
+  body.tags-v2 .event-tag.cat-Otros      { --tag-bg:#eef2f7; --tag-border:#e5e7eb; --tag-fg:#334155; }
+  body.tags-v2 .event-tag.cat-Festivo    { --tag-bg:#e0f2fe; --tag-border:#bae6fd; --tag-fg:#075985; }
+
+  /* Ajuste en tema dark */
+  [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
+    --tag-bg:rgba(255,255,255,.08); --tag-border:rgba(255,255,255,.16); --tag-fg:#e6ecff;
+  }
+  `;
+  const st = document.createElement('style');
+  st.id = 'tags-pill-css';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function injectMonthTagColorsFix(){
+  if (document.getElementById('tag-color-fix')) return;
+  const css = `
+  /* ——— Siempre muestra una franja izquierda con el color de categoría ——— */
+  body.tags-v2 .events-tags .event-tag{
+    /* la 1ª capa es la franja de 3px; la 2ª es el fondo de la píldora */
+    background-image:
+      linear-gradient(to right, var(--tag-color, transparent) 0, var(--tag-color, transparent) 3px, transparent 3px),
+      var(--tag-bg, rgba(0,0,0,.06));
+    background-repeat: no-repeat;
+    background-origin: border-box;
+  }
+
+  /* En dark, mantenemos fondo neutro pero con franja coloreada visible */
+  [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
+    --tag-bg: rgba(255,255,255,.06);
+    --tag-border: rgba(255,255,255,.16);
+    --tag-fg: #e6ecff;
+    color: var(--tag-fg) !important;
+  }
+
+  /* Por si algún navegador no tiene --tag-color ya definido, lo aseguramos aquí */
+  body.tags-v2 .event-tag.cat-Trabajo    { --tag-color:#167EE6; }
+  body.tags-v2 .event-tag.cat-Tarea      { --tag-color:#16a34a; }
+  body.tags-v2 .event-tag.cat-Citas      { --tag-color:#f59e0b; }
+  body.tags-v2 .event-tag.cat-Cumpleaños { --tag-color:#a855f7; }
+  body.tags-v2 .event-tag.cat-Otros      { --tag-color:#64748b; }
+  body.tags-v2 .event-tag.cat-Festivo    { --tag-color:#0ea5e9; }
+  `;
+  const st = document.createElement('style');
+  st.id = 'tag-color-fix';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
 // —— Estado del month picker infinito ——
 const mpState = {
   inited: false,
@@ -4090,13 +4216,14 @@ function applyTheme(theme) {
   injectAgendaStyles();
   injectSearchFullStyles();
   setPlatformClass();                 // 👈 NUEVO
-injectTagsV2HardReset();
   ensureSearchFullUI();
   injectMonthPickerStyles();
   ensureMonthPickerUI();
   hideLegacyNavArrows();
-  injectMonthDensityStyles();
-  injectMonthLightStyles();
+  injectHorizontalTagPills();
+  injectMonthTagColorsFix();
+  enforceTagPillsSkin(); 
+
   if (document.body) {
   document.body.classList.add('tags-v2');
 } else {
