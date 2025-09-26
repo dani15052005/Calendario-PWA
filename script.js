@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.1';
+window.__APP_VERSION__ = '1.2.2';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2289,6 +2289,31 @@ function injectHorizontalTagPills(){
   body.tags-v2 .event-tag.cat-Cumpleaños { --tag-bg:#f3e8ff; --tag-border:#e9d5ff; --tag-fg:#6b21a8; }
   body.tags-v2 .event-tag.cat-Otros      { --tag-bg:#eef2f7; --tag-border:#e5e7eb; --tag-fg:#334155; }
   body.tags-v2 .event-tag.cat-Festivo    { --tag-bg:#e0f2fe; --tag-border:#bae6fd; --tag-fg:#075985; }
+  /* mata cualquier marcador heredado en el contenedor */
+body.tags-v2 .events-tags::before,
+body.tags-v2 .events-tags::after{
+  content:none !important;
+  display:none !important;
+  width:0 !important;
+  height:0 !important;
+  background:transparent !important;
+  border:0 !important;
+}
+
+/* por si acaso había bullets/imágenes de fondo antiguos */
+body.tags-v2 .events-tags{
+  list-style:none !important;
+  background-image:none !important;
+  padding-left:0 !important;
+}
+
+/* por si algún wrapper se cuela entre .events-tags y .event-tag */
+body.tags-v2 .events-tags > * { min-width:0; }
+
+/* si no usas injectTagPillsBlue y quieres el fix iOS aquí mismo: */
+html[data-platform="ios"] body.tags-v2 .events-tags .event-tag .etxt{
+  line-height:16px; padding-bottom:.5px;
+}
 
   /* Ajuste en tema dark */
   [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
