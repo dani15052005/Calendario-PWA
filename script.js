@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.3';
+window.__APP_VERSION__ = '1.2.4';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -715,14 +715,21 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
-tag.className = `event-tag cat-${evt.category}`;
+      tag.className = `event-tag cat-${evt.category}`;
 
 // (opcional) fuera: no uses data-abbr para evitar CSS heredado que lo mostraba en ::after
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
 
-const showTitleOnly = (state.monthDensity === 'expanded');
-const timeLabel = (showTitleOnly || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
-const label = `${timeLabel ? timeLabel + ' ' : ''}${evt.title || ''}`;
+const wantsInitials = isCoarse;   // siempre iniciales en móvil/tablet
+
+// En móvil/tablet mostramos iniciales; en desktop el título completo.
+// (Si prefieres “primeros N caracteres”, cambia mode:'initials' por mode:'chars')
+const core = wantsInitials
+  ? shortLabelFromTitle(evt.title, { mode:'initials', maxLetters:4 })
+  : (evt.title || '');
+
+const timeLabel = (wantsInitials || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+const label = `${timeLabel ? timeLabel + ' ' : ''}${core}`;
 
 // mete el texto en un span para “blindarlo” frente a estilos viejos
 const spanTxt = document.createElement('span');
@@ -1928,6 +1935,17 @@ function highlightFragment(text, term){
   return frag;
 }
 
+function shortLabelFromTitle(title, { mode='initials', maxLetters=4, maxChars=12 } = {}){
+  const t = (title || '').trim();
+  if (!t) return '';
+  if (mode === 'initials'){
+    // iniciales de cada palabra, ignorando huecos
+    return t.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, maxLetters).toUpperCase();
+  }
+  // alternativa: primeros N caracteres
+  return (t.length > maxChars) ? (t.slice(0, maxChars - 1) + '…') : t;
+}
+
 function showSearchResultsSafe(items, highlightTerms = []){
   const box = $('#searchResults'); if (!box) return;
   box.innerHTML = '';
@@ -2344,11 +2362,6 @@ body.tags-v2 .events-tags > * { min-width:0; }
 html[data-platform="ios"] body.tags-v2 .events-tags .event-tag .etxt{
   line-height:16px; padding-bottom:.5px;
 }
-
-  /* Ajuste en tema dark */
-  [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
-    --tag-bg:rgba(255,255,255,.08); --tag-border:rgba(255,255,255,.16); --tag-fg:#e6ecff;
-  }
   `;
   const st = document.createElement('style');
   st.id = 'tags-pill-css';
@@ -2388,6 +2401,26 @@ function injectTagPillsBlue(){
   const st = document.createElement('style');
   st.id = 'tags-pill-blue';
   st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function fixDarkTagColors(){
+  if (document.getElementById('tag-dark-fix')) return;
+  const st = document.createElement('style');
+  st.id = 'tag-dark-fix';
+  st.textContent = `
+  /* Evita que el modo oscuro neutralice los colores por categoría */
+  [data-theme="dark"] body.tags-v2 .events-tags .event-tag{
+    --tag-bg: initial; --tag-border: initial; --tag-fg: initial;
+  }
+  /* Colores vivos por categoría también en dark */
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Trabajo    { --tag-bg:#1a73e8; --tag-border:#1669c1; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Tarea      { --tag-bg:#16a34a; --tag-border:#12833c; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Citas      { --tag-bg:#f59e0b; --tag-border:#d97706; --tag-fg:#0b0f02; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Cumpleaños { --tag-bg:#9333ea; --tag-border:#7e22ce; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Otros      { --tag-bg:#64748b; --tag-border:#475569; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Festivo    { --tag-bg:#0ea5e9; --tag-border:#0284c7; --tag-fg:#04141c; }
+  `;
   document.head.appendChild(st);
 }
 
@@ -4091,6 +4124,7 @@ function applyTheme(theme) {
   hideLegacyNavArrows();
   injectHorizontalTagPills();
   injectTagPillsBlue();
+  fixDarkTagColors();
   killMobileDots();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
