@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.7';
+window.__APP_VERSION__ = '1.2.8';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -682,13 +682,7 @@ try { markActiveRoller(); } catch {}
 
     const tags = document.createElement('div');
     tags.className = 'events-tags';
-    // 👇 fuerza layout visible aunque haya CSS antiguo
-tags.style.display = 'flex';
-tags.style.flexWrap = 'wrap';
-tags.style.gap = '4px';
-tags.style.listStyle = 'none';
-tags.style.backgroundImage = 'none';
-tags.style.paddingLeft = '0';
+    forceTagsBoxLayout(tags);
     tagRefs.set(dStr, tags);
 
     // Festivo visible al instante
@@ -730,6 +724,7 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
     for (const evt of dayEvts) {
       const tag = document.createElement('span');
       tag.className = `event-tag cat-${evt.category}`;
+      forceTagPillLayout(tag);
 
 // (opcional) fuera: no uses data-abbr para evitar CSS heredado que lo mostraba en ::after
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
@@ -749,6 +744,7 @@ const label = `${timeLabel ? timeLabel + ' ' : ''}${core}`;
 const spanTxt = document.createElement('span');
 spanTxt.className = 'etxt';
 spanTxt.textContent = label;
+forceTagText(spanTxt);
 tag.appendChild(spanTxt);
 
 const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
@@ -1616,6 +1612,51 @@ function nukeOldAbbrStyles(){
   document.head.appendChild(st);
 }
 nukeOldAbbrStyles();
+
+// --- Patches a prueba de "circulitos" antiguos ---
+function forceTagsBoxLayout(box){
+  const set = (p,v)=> box.style.setProperty(p, v, 'important');
+  set('display','flex');
+  set('flex-wrap','wrap');
+  set('gap','4px');
+  set('list-style','none');
+  set('background-image','none');
+  set('padding-left','0');
+  set('position','static');
+  set('overflow','visible');
+  set('max-height','none');
+}
+
+function forceTagPillLayout(tag){
+  const set = (p,v)=> tag.style.setProperty(p, v, 'important');
+  set('display','inline-flex');
+  set('align-items','center');
+  set('width','auto');
+  set('height','auto');
+  set('max-width','100%');
+  set('min-width','0');
+  set('padding','2px 8px');
+  set('border-radius','999px');
+  set('white-space','nowrap');
+  set('overflow','hidden');
+  set('text-overflow','ellipsis');
+  set('aspect-ratio','auto');
+  // neutraliza trucos típicos de “solo inicial”
+  set('font-size','12px');           // evita font-size:0 heredado
+  set('letter-spacing','normal');
+  set('text-indent','0');
+}
+
+function forceTagText(el){
+  const set = (p,v)=> el.style.setProperty(p, v, 'important');
+  set('display','inline');
+  set('min-width','0');
+  set('max-width','100%');
+  set('white-space','nowrap');
+  set('overflow','hidden');
+  set('text-overflow','ellipsis');
+  set('font-size','inherit');        // por si el padre tenía font-size:0
+}
 
 /* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
 async function deleteDriveFileIfAllowed(att){

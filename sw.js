@@ -1,4 +1,4 @@
-const VERSION = 'v1.2.7';
+const VERSION = 'v1.2.8';
 const STATIC_CACHE = `static-${VERSION}`;
 const STATIC_ASSETS = [
   './', './index.html', './styles.css', './script.js',

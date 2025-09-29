@@ -1155,3 +1155,7 @@ select option:disabled{
   background: #3b82f6 !important; /* azul */
   color: #fff !important;          /* texto en blanco para buen contraste */
 }
+
+body.tags-v2 .events-tags .event-tag::first-letter {
+  all: unset !important;
+}
