@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.2';
+window.__APP_VERSION__ = '1.2.3';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -1455,6 +1455,36 @@ function closeAttachmentViewer(){
   const dlg = document.getElementById('attViewer');
   if (!dlg) return;
   try { dlg.close(); } catch {}
+}
+
+function killMobileDots() {
+  if (document.getElementById('kill-mobile-dots')) return;
+  const st = document.createElement('style');
+  st.id = 'kill-mobile-dots';
+  st.textContent = `
+  /* Forzar que se vea el texto de los eventos en móviles/tablets */
+  @media (pointer: coarse), (max-width: 1024px) {
+    .calendar-grid .day .events-tags { 
+      display: flex !important; flex-wrap: wrap !important; gap: 4px !important; 
+      list-style: none !important; background-image: none !important; padding-left: 0 !important;
+    }
+    .calendar-grid .day .events-tags .event-tag {
+      display: inline-flex !important; align-items: center !important;
+      max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;
+      white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+      border-radius: 999px !important; padding: 2px 8px !important;
+    }
+    /* Mata cualquier “punto” o abreviatura que venga de CSS antiguo */
+    .calendar-grid .day .events-tags .event-tag::before,
+    .calendar-grid .day .events-tags .event-tag::after {
+      content: none !important; display: none !important; width: 0 !important; height: 0 !important;
+    }
+    .calendar-grid .day .events-tags .event-tag .etxt {
+      display: inline !important; min-width: 0 !important; max-width: 100% !important;
+      overflow: hidden !important; text-overflow: ellipsis !important;
+    }
+  }`;
+  document.head.appendChild(st);
 }
 
 /* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
@@ -4054,13 +4084,14 @@ function applyTheme(theme) {
   injectToastStyles();
   injectAgendaStyles();
   injectSearchFullStyles();
-  setPlatformClass();                 // 👈 NUEVO
+  setPlatformClass();                 
   ensureSearchFullUI();
   injectMonthPickerStyles();
   ensureMonthPickerUI();
   hideLegacyNavArrows();
   injectHorizontalTagPills();
   injectTagPillsBlue();
+  killMobileDots();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
