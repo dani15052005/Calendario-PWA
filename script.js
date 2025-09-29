@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.8';
+window.__APP_VERSION__ = '1.2.9';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -730,8 +730,8 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
 
 // En móvil/tablet: mostrar los primeros N caracteres del título
-const wantsShort = IS_COARSE_POINTER;
-const maxCharsMobile = (state.monthDensity === 'expanded') ? 12 : 10;
+const wantsShort = IS_COARSE_POINTER && state.monthDensity === 'compact';
+const maxCharsMobile = (state.monthDensity === 'expanded') ? 24 : 16;
 
 const core = wantsShort
   ? shortLabelFromTitle(evt.title, { mode: 'chars', maxChars: maxCharsMobile }) // "La Asunció…"
