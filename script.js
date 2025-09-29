@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.6';
+window.__APP_VERSION__ = '1.2.7';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -1572,6 +1572,50 @@ function injectTagsHardFixV3(){
   `;
   document.head.appendChild(st);
 }
+
+function nukeOldAbbrStyles(){
+  if (document.getElementById('tags-abbr-nuker')) return;
+  const st = document.createElement('style');
+  st.id = 'tags-abbr-nuker';
+  st.textContent = `
+  /* Quita los pseudo-elementos que dibujan una sola inicial */
+  .events-tags .event-tag::before,
+  .events-tags .event-tag::after {
+    content: none !important;
+    display: none !important;
+    width: 0 !important; height: 0 !important; border: 0 !important;
+  }
+
+  /* Asegura “píldora” con texto recortable, no círculo */
+  .events-tags .event-tag,
+  .event-tag {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important; height: auto !important;
+    max-width: 100% !important; min-width: 0 !important;
+    padding: 2px 8px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    aspect-ratio: auto !important;
+  }
+
+  /* El texto real que metes en <span class="etxt"> manda */
+  .events-tags .event-tag .etxt {
+    display: inline !important;
+    min-width: 0 !important; max-width: 100% !important;
+    overflow: hidden !important; text-overflow: ellipsis !important;
+  }
+
+  /* Móvil: por si acaso */
+  @media (pointer: coarse) {
+    .day .events-tags { display:flex !important; flex-wrap:wrap !important; gap:4px !important; }
+  }
+  `;
+  document.head.appendChild(st);
+}
+nukeOldAbbrStyles();
 
 /* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
 async function deleteDriveFileIfAllowed(att){
