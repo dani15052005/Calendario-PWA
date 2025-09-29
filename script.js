@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.5';
+window.__APP_VERSION__ = '1.2.6';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -734,18 +734,18 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 // (opcional) fuera: no uses data-abbr para evitar CSS heredado que lo mostraba en ::after
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
 
-const wantsInitials = IS_COARSE_POINTER;   // siempre iniciales en móvil/tablet
+// En móvil/tablet: mostrar los primeros N caracteres del título
+const wantsShort = IS_COARSE_POINTER;
+const maxCharsMobile = (state.monthDensity === 'expanded') ? 12 : 10;
 
-// En móvil/tablet mostramos iniciales; en desktop el título completo.
-// (Si prefieres “primeros N caracteres”, cambia mode:'initials' por mode:'chars')
-const core = wantsInitials
-  ? shortLabelFromTitle(evt.title, { mode:'initials', maxLetters:4 })
+const core = wantsShort
+  ? shortLabelFromTitle(evt.title, { mode: 'chars', maxChars: maxCharsMobile }) // "La Asunció…"
   : (evt.title || '');
 
-const timeLabel = (wantsInitials || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+const timeLabel = (wantsShort || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
 const label = `${timeLabel ? timeLabel + ' ' : ''}${core}`;
 
-// mete el texto en un span para “blindarlo” frente a estilos viejos
+// meter el texto en un span para “blindarlo” frente a estilos viejos
 const spanTxt = document.createElement('span');
 spanTxt.className = 'etxt';
 spanTxt.textContent = label;
@@ -1522,6 +1522,56 @@ function killMobileDots() {
   document.head.appendChild(st);
 }
 
+function injectTagsHardFixV3(){
+  if (document.getElementById('tags-hardfix-v3')) return;
+  const st = document.createElement('style');
+  st.id = 'tags-hardfix-v3';
+  st.textContent = `
+  /* 1) Contenedor: multiplica en varias líneas y NUNCA absoluto */
+  body.tags-v2 .day .events-tags{
+    position: static !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    align-content: flex-start !important;
+    justify-content: flex-start !important;
+    overflow: visible !important;
+    background-image: none !important;
+    list-style: none !important;
+    padding-left: 0 !important;
+    max-height: none !important;
+    white-space: normal !important;
+  }
+
+  /* 2) Píldoras: visibles, con texto y sin pseudo-elementos “barra” */
+  body.tags-v2 .events-tags .event-tag{
+    display: inline-flex !important;
+    align-items: center !important;
+    height: auto !important;
+    max-width: 100% !important; min-width: 0 !important;
+    padding: 2px 8px !important; border-radius: 999px !important;
+    font-size: 12px !important; line-height: 16px !important; font-weight: 700 !important;
+    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+  }
+  body.tags-v2 .events-tags .event-tag::before,
+  body.tags-v2 .events-tags .event-tag::after{
+    content: none !important; display: none !important;
+    width: 0 !important; height: 0 !important; border: 0 !important;
+  }
+  body.tags-v2 .events-tags .event-tag .etxt{
+    display: inline !important; min-width: 0 !important; max-width: 100% !important;
+  }
+
+  /* 3) Colores (si algo los “aplana”, los volvemos a fijar) */
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Trabajo    { --tag-bg:#1a73e8; --tag-border:#1669c1; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Tarea      { --tag-bg:#16a34a; --tag-border:#12833c; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Citas      { --tag-bg:#f59e0b; --tag-border:#d97706; --tag-fg:#0b0f02; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Cumpleaños { --tag-bg:#9333ea; --tag-border:#7e22ce; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Otros      { --tag-bg:#64748b; --tag-border:#475569; --tag-fg:#fff; }
+  [data-theme="dark"] body.tags-v2 .event-tag.cat-Festivo    { --tag-bg:#0ea5e9; --tag-border:#0284c7; --tag-fg:#04141c; }
+  `;
+  document.head.appendChild(st);
+}
 
 /* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
 async function deleteDriveFileIfAllowed(att){
@@ -4155,6 +4205,7 @@ function applyTheme(theme) {
   injectTagPillsBlue();
   fixDarkTagColors();
   killMobileDots();
+  injectTagsHardFixV3();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
