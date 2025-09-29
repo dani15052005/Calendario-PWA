@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.4';
+window.__APP_VERSION__ = '1.2.5';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -128,6 +128,8 @@ const DAY_START_H = 7;
 const DAY_END_H   = 18;
 const PX_PER_HOUR = 60;
 const PX_PER_MIN  = PX_PER_HOUR / 60;
+// Pointer “coarse” = móvil/tablet
+const IS_COARSE_POINTER = window.matchMedia('(pointer: coarse)').matches;
 
 function injectDrawerVersion(){
   const el = document.getElementById('appVersionLabel');
@@ -493,6 +495,11 @@ const state = {
   monthDensity: localStorage.getItem('month.density') || 'compact', // ⬅️ aquí
 };
 
+const ALL_CATS = ['Trabajo','Tarea','Citas','Cumpleaños','Otros','Festivo'];
+if (!(state.filters instanceof Set) || state.filters.size === 0) {
+  state.filters = new Set(ALL_CATS);
+}
+
 // ===================== IndexedDB =====================
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -675,6 +682,13 @@ try { markActiveRoller(); } catch {}
 
     const tags = document.createElement('div');
     tags.className = 'events-tags';
+    // 👇 fuerza layout visible aunque haya CSS antiguo
+tags.style.display = 'flex';
+tags.style.flexWrap = 'wrap';
+tags.style.gap = '4px';
+tags.style.listStyle = 'none';
+tags.style.backgroundImage = 'none';
+tags.style.paddingLeft = '0';
     tagRefs.set(dStr, tags);
 
     // Festivo visible al instante
@@ -720,7 +734,7 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 // (opcional) fuera: no uses data-abbr para evitar CSS heredado que lo mostraba en ::after
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
 
-const wantsInitials = isCoarse;   // siempre iniciales en móvil/tablet
+const wantsInitials = IS_COARSE_POINTER;   // siempre iniciales en móvil/tablet
 
 // En móvil/tablet mostramos iniciales; en desktop el título completo.
 // (Si prefieres “primeros N caracteres”, cambia mode:'initials' por mode:'chars')
@@ -1469,30 +1483,45 @@ function killMobileDots() {
   const st = document.createElement('style');
   st.id = 'kill-mobile-dots';
   st.textContent = `
-  /* Forzar que se vea el texto de los eventos en móviles/tablets */
+  /* Mostrar SIEMPRE las etiquetas en móvil/tablet */
   @media (pointer: coarse), (max-width: 1024px) {
-    .calendar-grid .day .events-tags { 
-      display: flex !important; flex-wrap: wrap !important; gap: 4px !important; 
-      list-style: none !important; background-image: none !important; padding-left: 0 !important;
+    .day .events-tags {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 4px !important;
+      list-style: none !important;
+      background-image: none !important;
+      padding-left: 0 !important;
     }
-    .calendar-grid .day .events-tags .event-tag {
-      display: inline-flex !important; align-items: center !important;
-      max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;
-      white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
-      border-radius: 999px !important; padding: 2px 8px !important;
+    .day .events-tags .event-tag {
+      display: inline-flex !important;
+      align-items: center !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      border-radius: 999px !important;
+      padding: 2px 8px !important;
     }
-    /* Mata cualquier “punto” o abreviatura que venga de CSS antiguo */
-    .calendar-grid .day .events-tags .event-tag::before,
-    .calendar-grid .day .events-tags .event-tag::after {
-      content: none !important; display: none !important; width: 0 !important; height: 0 !important;
+    .day .events-tags .event-tag::before,
+    .day .events-tags .event-tag::after {
+      content: none !important;
+      display: none !important;
+      width: 0 !important; height: 0 !important;
     }
-    .calendar-grid .day .events-tags .event-tag .etxt {
-      display: inline !important; min-width: 0 !important; max-width: 100% !important;
-      overflow: hidden !important; text-overflow: ellipsis !important;
+    .day .events-tags .event-tag .etxt {
+      display: inline !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
   }`;
   document.head.appendChild(st);
 }
+
 
 /* === Borrado definitivo de adjuntos (opcional: espejo en Drive) === */
 async function deleteDriveFileIfAllowed(att){
@@ -4149,9 +4178,6 @@ state.monthDensity = localStorage.getItem('month.density') || 'expanded';
 
 // botón/gesto para abrirlo
 on('#monthDropBtn','click', (ev)=> { ev.stopPropagation(); toggleMonthPicker(); });
-
-  applyTheme(state.theme);
-  try { updateCornerBrand(); } catch (_) {}
 
   state.db = await openDB();
 
