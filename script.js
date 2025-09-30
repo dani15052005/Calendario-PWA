@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.9';
+window.__APP_VERSION__ = '1.2.10';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -730,14 +730,16 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 // tag.setAttribute('data-abbr', abbr);  // ← quítalo
 
 // En móvil/tablet: mostrar los primeros N caracteres del título
-const wantsShort = IS_COARSE_POINTER && state.monthDensity === 'compact';
-const maxCharsMobile = (state.monthDensity === 'expanded') ? 24 : 16;
+// En modo expanded NO acortamos en móvil
+const wantsShort = (state.monthDensity !== 'expanded') ? IS_COARSE_POINTER : false;
+const maxCharsMobile = 12; // si quieres, súbelo a 18
 
 const core = wantsShort
-  ? shortLabelFromTitle(evt.title, { mode: 'chars', maxChars: maxCharsMobile }) // "La Asunció…"
+  ? shortLabelFromTitle(evt.title, { mode: 'chars', maxChars: maxCharsMobile })
   : (evt.title || '');
 
-const timeLabel = (wantsShort || evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
+// La hora solo se oculta si es all-day o festivo
+const timeLabel = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
 const label = `${timeLabel ? timeLabel + ' ' : ''}${core}`;
 
 // meter el texto en un span para “blindarlo” frente a estilos viejos
@@ -2568,6 +2570,50 @@ function injectTagPillsBlue(){
   document.head.appendChild(st);
 }
 
+function injectMobilePillAntidote(){
+  if (document.getElementById('mobile-pill-antidote')) return;
+  const css = `
+@media (max-width: 1024px), (pointer: coarse) {
+  /* Mostrar SIEMPRE las etiquetas en móvil */
+  #calendarGrid .events-tags{
+    display:flex !important; flex-wrap:wrap !important; gap:4px !important;
+    list-style:none !important; background:none !important; padding-left:0 !important;
+    position:static !important; overflow:visible !important;
+  }
+  /* Píldoras legibles (anula abreviadores agresivos) */
+  #calendarGrid .events-tags .event-tag{
+    display:inline-flex !important; align-items:center !important;
+    max-width:100% !important; min-width:0 !important;
+    padding:2px 8px !important; border-radius:999px !important;
+    white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important;
+    font-size:12px !important; line-height:16px !important; font-weight:700 !important;
+    text-indent:0 !important; letter-spacing:normal !important;
+  }
+  #calendarGrid .events-tags .event-tag .etxt{
+    display:inline !important; min-width:0 !important; max-width:100% !important;
+    overflow:hidden !important; text-overflow:ellipsis !important; font-size:inherit !important;
+  }
+  /* Mata contadores/pseudo-elementos que dibujan "1." o bolitas */
+  #calendarGrid .day::before,
+  #calendarGrid .day::after,
+  #calendarGrid .events-tags::before,
+  #calendarGrid .events-tags::after,
+  #calendarGrid .events-tags .event-tag::before,
+  #calendarGrid .events-tags .event-tag::after,
+  #calendarGrid .day .event-count,
+  #calendarGrid .day .count,
+  #calendarGrid .day .dots,
+  #calendarGrid .day .badge{
+    content:"" !important; display:none !important;
+  }
+}
+  `;
+  const st = document.createElement('style');
+  st.id = 'mobile-pill-antidote';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
 function fixDarkTagColors(){
   if (document.getElementById('tag-dark-fix')) return;
   const st = document.createElement('style');
@@ -4291,6 +4337,7 @@ function applyTheme(theme) {
   fixDarkTagColors();
   killMobileDots();
   injectTagsHardFixV3();
+  injectMobilePillAntidote();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
