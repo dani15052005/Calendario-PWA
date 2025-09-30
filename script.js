@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.11';
+window.__APP_VERSION__ = '1.2.12';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -732,25 +732,20 @@ loadMonthEvents(year, month).then((eventsByDayAll) => {
 // En móvil/tablet: mostrar los primeros N caracteres del título
 // En modo expanded NO acortamos en móvil
 const wantsShort = (state.monthDensity !== 'expanded') ? IS_COARSE_POINTER : false;
-const maxCharsMobile = 12; // si quieres, súbelo a 18
-
+const maxCharsMobile = 12;
 const core = wantsShort
   ? shortLabelFromTitle(evt.title, { mode: 'chars', maxChars: maxCharsMobile })
   : (evt.title || '');
 
-// La hora solo se oculta si es all-day o festivo
-const timeLabel = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
-const label = `${timeLabel ? timeLabel + ' ' : ''}${core}`;
+const label = core;   // ← solo título
 
-// meter el texto en un span para “blindarlo” frente a estilos viejos
 const spanTxt = document.createElement('span');
 spanTxt.className = 'etxt';
 spanTxt.textContent = label;
-forceTagText(spanTxt);
 tag.appendChild(spanTxt);
 
-const timeLabelTitle = (evt.allDay || evt.category === 'Festivo') ? '' : (evt.time || '');
-tag.title = `${timeLabelTitle ? timeLabelTitle + ' · ' : ''}${evt.title || ''}`;
+// tooltip solo con el título
+tag.title = evt.title || '';
 
 // ¡clicable!
 tag.setAttribute('role','button');

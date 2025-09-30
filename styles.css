@@ -1159,3 +1159,5 @@ select option:disabled{
 body.tags-v2 .events-tags .event-tag::first-letter {
   all: unset !important;
 }
+
+body.tags-v2 .events-tags .event-tag .t { display: none !important; }
