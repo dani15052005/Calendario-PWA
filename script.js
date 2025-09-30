@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.10';
+window.__APP_VERSION__ = '1.2.11';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -1647,6 +1647,9 @@ function forceTagPillLayout(tag){
   set('font-size','12px');           // evita font-size:0 heredado
   set('letter-spacing','normal');
   set('text-indent','0');
+  set('list-style','none');
+  set('counter-reset','none');
+  set('counter-increment','none');
 }
 
 function forceTagText(el){
@@ -2610,6 +2613,58 @@ function injectMobilePillAntidote(){
   `;
   const st = document.createElement('style');
   st.id = 'mobile-pill-antidote';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+// Mata contadores y marcadores tipo "1." en la vista de mes (móvil/tablet)
+function nukeCountBadges(){
+  if (document.getElementById('nuke-count-badges')) return;
+  const css = `
+@media (max-width: 1024px), (pointer: coarse) {
+  /* Nada de bullets ni counters en el contenedor ni hijos */
+  #calendarGrid .events-tags,
+  #calendarGrid .events-tags *{
+    list-style: none !important;
+    counter-reset: none !important;
+    counter-increment: none !important;
+  }
+
+  /* Oculta marcadores clásicos (el "1." suele venir de aquí) */
+  #calendarGrid .day li::marker,
+  #calendarGrid .events-tags li::marker,
+  #calendarGrid .events-tags .event-tag::marker{
+    content: "" !important;
+  }
+
+  /* Y cualquier badge/counter que se pinte con pseudo-elementos */
+  #calendarGrid .day::before,
+  #calendarGrid .day::after,
+  #calendarGrid .events-tags::before,
+  #calendarGrid .events-tags::after,
+  #calendarGrid .events-tags .event-tag::before,
+  #calendarGrid .events-tags .event-tag::after,
+  #calendarGrid .day .count,
+  #calendarGrid .day [class*="count"],
+  #calendarGrid .day .badge,
+  #calendarGrid .day .dots,
+  #calendarGrid .day [data-count]{
+    content: "" !important;
+    display: none !important;
+  }
+
+  /* Asegura que la píldora es texto normal, no "círculo con cifra" */
+  #calendarGrid .events-tags .event-tag{
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important; height: auto !important; aspect-ratio: auto !important;
+    font-size: 12px !important; line-height: 16px !important; text-indent: 0 !important;
+    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+  }
+}
+`;
+  const st = document.createElement('style');
+  st.id = 'nuke-count-badges';
   st.textContent = css;
   document.head.appendChild(st);
 }
@@ -4338,6 +4393,7 @@ function applyTheme(theme) {
   killMobileDots();
   injectTagsHardFixV3();
   injectMobilePillAntidote();
+  nukeCountBadges();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
