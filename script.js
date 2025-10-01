@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.17';
+window.__APP_VERSION__ = '1.2.18';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -4550,6 +4550,7 @@ function applyTheme(theme) {
   injectDenseTagText();
   injectEvenBiggerMonth();
   injectTighterTagMargins();
+  injectEdgeToEdgeMonth();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
