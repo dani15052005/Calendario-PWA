@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.16';
+window.__APP_VERSION__ = '1.2.17';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2764,6 +2764,59 @@ function injectTighterTagMargins(){
     /* Opcional: sangra 1px para ganar un pelín más de ancho */
     #calendarGrid .events-tags{ margin-inline: -1px !important; }
     #calendarGrid .events-tags .event-tag{ max-width: calc(100% + 2px) !important; }
+  }`;
+  document.head.appendChild(st);
+}
+
+function injectEdgeToEdgeMonth(){
+  if (document.getElementById('edge-to-edge-month')) return;
+  const st = document.createElement('style');
+  st.id = 'edge-to-edge-month';
+  st.textContent = `
+  @media (max-width:1024px), (pointer:coarse){
+    /* 1) el contenedor del mes sin márgenes laterales */
+    #monthView{
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    /* 2) si el calendario va dentro de una tarjeta/panel, reduce su padding */
+    #monthView .panel,
+    #monthView .card,
+    #monthView .calendar-card,
+    #monthView .month-card{
+      padding-left: 6px !important;   /* ajusta a 4px si quieres aún más */
+      padding-right: 6px !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    /* 3) el grid sin relleno ni márgenes, ocupando todo el ancho */
+    #calendarGrid{
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      width: 100% !important;
+      grid-template-columns: repeat(7, minmax(0,1fr)) !important;
+      gap: 4px !important;            /* puedes dejarlo en 6–8 si prefieres más aire */
+    }
+
+    /* 4) celdas un pelín más grandes para aprovechar el nuevo ancho */
+    #calendarGrid .day{
+      min-height: clamp(96px, 16vw, 180px) !important;
+      padding: 6px !important;        /* combinado con el ajuste de etiquetas que ya pusimos */
+      border-radius: 12px !important;
+    }
+
+    /* 5) que las etiquetas usen todo el carril disponible */
+    #calendarGrid .events-tags{ margin-inline: -1px !important; }
+    #calendarGrid .events-tags .event-tag{
+      width: 100% !important;
+      max-width: calc(100% + 2px) !important;
+    }
   }`;
   document.head.appendChild(st);
 }

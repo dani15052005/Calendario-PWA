@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.15';
+window.__APP_VERSION__ = '1.2.16';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2742,6 +2742,32 @@ function nukeCountBadges(){
   document.head.appendChild(st);
 }
 
+function injectTighterTagMargins(){
+  if (document.getElementById('tight-tag-margins')) return;
+  const st = document.createElement('style');
+  st.id = 'tight-tag-margins';
+  st.textContent = `
+  @media (max-width:1024px), (pointer:coarse){
+    /* Menos borde interior del recuadro del día */
+    #calendarGrid .day{
+      padding: 6px !important;          /* antes 8px */
+    }
+    /* Menos separación debajo del número */
+    #calendarGrid .day .day-head{
+      margin-bottom: 2px !important;    /* antes 4px */
+    }
+    /* Píldoras: ocupar el ancho completo disponible */
+    #calendarGrid .events-tags .event-tag{
+      width: 100% !important;
+      padding: 2px 8px !important;      /* mantenemos altura cómoda */
+    }
+    /* Opcional: sangra 1px para ganar un pelín más de ancho */
+    #calendarGrid .events-tags{ margin-inline: -1px !important; }
+    #calendarGrid .events-tags .event-tag{ max-width: calc(100% + 2px) !important; }
+  }`;
+  document.head.appendChild(st);
+}
+
 function fixDarkTagColors(){
   if (document.getElementById('tag-dark-fix')) return;
   const st = document.createElement('style');
@@ -4470,6 +4496,7 @@ function applyTheme(theme) {
   injectBiggerMonthCells();
   injectDenseTagText();
   injectEvenBiggerMonth();
+  injectTighterTagMargins();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
