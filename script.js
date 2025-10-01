@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.13';
+window.__APP_VERSION__ = '1.2.14';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2612,6 +2612,36 @@ function injectMobilePillAntidote(){
   document.head.appendChild(st);
 }
 
+function injectBiggerMonthCells(){
+  if (document.getElementById('bigger-month-cells-css')) return;
+  const st = document.createElement('style');
+  st.id = 'bigger-month-cells-css';
+  st.textContent = `
+  /* Móvil / tablet: usa mejor el ancho y haz las celdas más grandes */
+  @media (max-width: 1024px), (pointer: coarse){
+    /* 1) Menos sangría a los lados del mes */
+    #monthView { padding-inline: 6px !important; }
+
+    /* 2) La rejilla ocupa todo el ancho, con poco gap */
+    #calendarGrid{
+      grid-template-columns: repeat(7, minmax(0,1fr)) !important;
+      gap: 6px !important;
+      padding: 0 !important;
+    }
+
+    /* 3) Celdas más altas (≈ cuadradas) y con menos “marco” interno */
+    #calendarGrid .day{
+      min-height: clamp(82px, 14vw, 140px) !important;
+      padding: 8px !important;
+      border-radius: 12px !important;
+    }
+
+    /* 4) Cabecera de día un pelín más compacta */
+    #calendarGrid .day .day-head{ margin-bottom: 4px !important; }
+  }`;
+  document.head.appendChild(st);
+}
+
 // Mata contadores y marcadores tipo "1." en la vista de mes (móvil/tablet)
 function nukeCountBadges(){
   if (document.getElementById('nuke-count-badges')) return;
@@ -4389,6 +4419,7 @@ function applyTheme(theme) {
   injectTagsHardFixV3();
   injectMobilePillAntidote();
   nukeCountBadges();
+  injectBiggerMonthCells();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
