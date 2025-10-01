@@ -1,7 +1,7 @@
 window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.14';
+window.__APP_VERSION__ = '1.2.15';
 const VERSION_ENDPOINT = './app-version.json';
 
 async function fetchVersionManifest() {
@@ -2642,6 +2642,54 @@ function injectBiggerMonthCells(){
   document.head.appendChild(st);
 }
 
+function injectDenseTagText(){
+  if (document.getElementById('dense-tag-text-css')) return;
+  const st = document.createElement('style');
+  st.id = 'dense-tag-text-css';
+  st.textContent = `
+  @media (max-width:1024px), (pointer:coarse){
+    #calendarGrid .events-tags .event-tag{
+      padding: 1px 6px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      white-space: normal !important;   /* <- clave para permitir 2 líneas */
+      align-items: flex-start !important;
+    }
+    #calendarGrid .events-tags .event-tag .etxt{
+      font-size: 11px !important;
+      line-height: 14px !important;
+      white-space: normal !important;
+      display: -webkit-box !important;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+  }`;
+  document.head.appendChild(st);
+}
+
+function injectEvenBiggerMonth(){
+  if (document.getElementById('even-bigger-month-css')) return;
+  const st = document.createElement('style');
+  st.id = 'even-bigger-month-css';
+  st.textContent = `
+  @media (max-width:1024px), (pointer:coarse){
+    /* Reduce márgenes laterales del contenedor del mes */
+    #monthView{ padding-inline: 4px !important; }
+    /* Menos separación entre celdas ⇒ más ancho para el texto */
+    #calendarGrid{ gap: 4px !important; padding: 0 !important; }
+    /* Celdas más altas */
+    #calendarGrid .day{
+      min-height: clamp(96px, 16vw, 180px) !important;
+      padding: 8px !important;
+      border-radius: 12px !important;
+    }
+    #calendarGrid .day .day-head{ margin-bottom: 4px !important; }
+  }`;
+  document.head.appendChild(st);
+}
+
 // Mata contadores y marcadores tipo "1." en la vista de mes (móvil/tablet)
 function nukeCountBadges(){
   if (document.getElementById('nuke-count-badges')) return;
@@ -4420,6 +4468,8 @@ function applyTheme(theme) {
   injectMobilePillAntidote();
   nukeCountBadges();
   injectBiggerMonthCells();
+  injectDenseTagText();
+  injectEvenBiggerMonth();
 
   document.getElementById('tags-v2-hard-reset')?.remove();
   document.getElementById('month-density-css')?.remove();
