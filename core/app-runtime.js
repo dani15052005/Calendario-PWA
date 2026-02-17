@@ -490,6 +490,35 @@ function getSupabaseClient(){
   if (!window.supabase || typeof window.supabase.createClient !== 'function') return null;
   if (!isSupabaseConfigReady(cfg)) return null;
 
+  console.log("==== SUPABASE RUNTIME DIAGNOSTIC ====");
+  console.log("Location:", window.location.href);
+
+  const runtimeCfg = window.__APP_CONFIG__ || {};
+
+  console.log("Raw __APP_CONFIG__:", runtimeCfg);
+
+  const url = runtimeCfg.supabaseUrl || runtimeCfg.SUPABASE_URL;
+  const key = runtimeCfg.supabaseAnonKey || runtimeCfg.SUPABASE_ANON_KEY;
+
+  console.log("Supabase URL used:", url);
+  console.log("Supabase anon key present:", !!key);
+
+  if (url) {
+    const normalized = url.replace(/\/+$/, '');
+    console.log("Normalized URL:", normalized);
+
+    const match = normalized.match(/https:\/\/([^.]+)\.supabase\.co/);
+    const projectRef = match ? match[1] : null;
+
+    console.log("Extracted project ref:", projectRef);
+    console.log(
+      "RPC endpoint constructed:",
+      normalized + "/rest/v1/rpc/check_owner_policy_active"
+    );
+  }
+
+  console.log("==== END SUPABASE DIAGNOSTIC ====");
+
   _authSupabase = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
     auth: {
       persistSession: true,
