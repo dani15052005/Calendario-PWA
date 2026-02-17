@@ -3,6 +3,8 @@ console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
 window.__APP_VERSION__ = '1.2.19';
 const VERSION_ENDPOINT = './app-version.json';
+const EXPECTED_SUPABASE_PROJECT_URL = 'https://hqwjpjlawxrmxfcyfdbx.supabase.co';
+const EXPECTED_OWNER_POLICY_RPC = 'check_owner_policy_active';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
 const GOOGLE_OAUTH_SIGNIN_SCOPES = [
   'openid',
@@ -17,6 +19,7 @@ let _authBootDone = false;
 let _authGateReady = false;
 let _authBlockedByEmail = false;
 let _supabaseUserRowEnsuredFor = null;
+let _supabaseDebugLogged = false;
 let _logoutInProgress = false;
 let _ownerPolicyFatalInvalid = false;
 let _ownerPolicyLastTransientError = null;
@@ -219,10 +222,70 @@ function getAuthHelpers(){
 function getRuntimeAuthConfig(){
   const cfg = window.__APP_CONFIG__ || {};
   return {
-    supabaseUrl: String(cfg.SUPABASE_URL || '').trim(),
+    supabaseUrl: String(cfg.SUPABASE_URL || '').trim().replace(/\/+$/, ''),
     supabaseAnonKey: String(cfg.SUPABASE_ANON_KEY || '').trim(),
     ownerEmail: String(cfg.OWNER_EMAIL || OWNER_EMAIL_FALLBACK)
   };
+}
+
+function shouldDebugSupabaseTarget(){
+  const host = String(window.location.hostname || '').trim().toLowerCase();
+  return host === 'localhost'
+    || host === '127.0.0.1'
+    || host.includes('github.io');
+}
+
+function extractSupabaseProjectRef(url){
+  const value = String(url || '').trim();
+  if (!value) return '';
+  try {
+    return value.split('//')[1]?.split('.')[0] || '';
+  } catch (err) {
+    void err;
+    return '';
+  }
+}
+
+function buildOwnerPolicyRpcEndpoint(url, rpcName = EXPECTED_OWNER_POLICY_RPC){
+  const base = String(url || '').trim().replace(/\/+$/, '');
+  const name = String(rpcName || EXPECTED_OWNER_POLICY_RPC).trim();
+  if (!base || !name) return '';
+  return `${base}/rest/v1/rpc/${name}`;
+}
+
+function debugSupabaseTarget(inputCfg = null){
+  if (!shouldDebugSupabaseTarget()) return;
+  if (_supabaseDebugLogged) return;
+  _supabaseDebugLogged = true;
+  try {
+    const runtimeCfg = inputCfg || getRuntimeAuthConfig();
+    const cfg = window.__APP_CONFIG__ || {};
+    const url = String(runtimeCfg.supabaseUrl || '').trim();
+    const key = String(runtimeCfg.supabaseAnonKey || '').trim();
+    const rpcName = String(cfg.OWNER_POLICY_CHECK_RPC || EXPECTED_OWNER_POLICY_RPC).trim() || EXPECTED_OWNER_POLICY_RPC;
+    const ref = extractSupabaseProjectRef(url);
+    const rpcEndpoint = buildOwnerPolicyRpcEndpoint(url, rpcName);
+    const expectedRpcEndpoint = buildOwnerPolicyRpcEndpoint(EXPECTED_SUPABASE_PROJECT_URL, EXPECTED_OWNER_POLICY_RPC);
+    const urlMatchesExpected = url === EXPECTED_SUPABASE_PROJECT_URL;
+    const rpcMatchesExpected = rpcEndpoint === expectedRpcEndpoint;
+
+    console.info('[SUPABASE DEBUG]');
+    console.info('URL:', url);
+    console.info('Project Ref:', ref);
+    console.info('Key present:', !!key);
+    console.info('RPC endpoint:', rpcEndpoint);
+    console.info('Expected RPC endpoint:', expectedRpcEndpoint);
+    console.info('URL matches expected:', urlMatchesExpected);
+    console.info('RPC matches expected:', rpcMatchesExpected);
+
+    const verified = urlMatchesExpected && rpcMatchesExpected && !!key;
+    console.info('[SUPABASE CONFIG VERIFIED]', verified);
+    if (!verified) {
+      console.warn('[SUPABASE CONFIG MISMATCH]');
+    }
+  } catch (err) {
+    console.warn('Supabase debug failed');
+  }
 }
 
 function isSupabaseConfigReady(cfg){
@@ -308,7 +371,7 @@ async function checkOwnerPolicyActive() {
   }
 
   const cfg = window.__APP_CONFIG__ || {};
-  const rpcName = String(cfg.OWNER_POLICY_CHECK_RPC || 'check_owner_policy_active').trim();
+  const rpcName = String(cfg.OWNER_POLICY_CHECK_RPC || EXPECTED_OWNER_POLICY_RPC).trim();
   const ownerEmail = String(getOwnerEmail() || '').trim().toLowerCase();
   const wrongEmailProbe = `rls-probe-${Date.now()}@example.invalid`;
 
@@ -423,6 +486,7 @@ function unlockAppUI(){
 function getSupabaseClient(){
   if (_authSupabase) return _authSupabase;
   const cfg = getRuntimeAuthConfig();
+  debugSupabaseTarget(cfg);
   if (!window.supabase || typeof window.supabase.createClient !== 'function') return null;
   if (!isSupabaseConfigReady(cfg)) return null;
 
