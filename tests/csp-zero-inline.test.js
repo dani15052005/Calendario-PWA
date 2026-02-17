@@ -4,7 +4,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const indexPath = path.join(root, 'index.html');
-const bootFinalPath = path.join(root, 'core', 'boot-final.js');
+const bootProductionPath = path.join(root, 'core', 'boot-production.js');
 const html = fs.readFileSync(indexPath, 'utf8');
 
 // 1) No <script> inline sin src
@@ -24,7 +24,7 @@ assert.strictEqual(
   `index.html no debe tener handlers inline onXXX=. Encontrados: ${inlineHandlers.map((m) => m[0]).join(' | ')}`
 );
 
-// 3) CSP script-src estricto: sin unsafe-inline, sin nonce (hash permitido para GIS)
+// 3) CSP script-src estricto: sin unsafe-inline, sin nonce, sin hash
 const cspTag = html.match(/<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/i);
 assert.ok(cspTag, 'Debe existir meta CSP');
 const cspContentMatch = cspTag[0].match(/content="([\s\S]*?)"/i);
@@ -35,15 +35,12 @@ assert.ok(scriptSrcMatch, 'CSP debe incluir script-src');
 const scriptSrc = scriptSrcMatch[1];
 assert.ok(!/unsafe-inline/i.test(scriptSrc), "script-src no debe contener 'unsafe-inline'");
 assert.ok(!/nonce-/i.test(scriptSrc), 'script-src no debe usar nonce');
-assert.ok(
-  /sha256-vvt4KWwuNr51XfE5m\+hzeNEGhiOfZzG97ccfqGsPwvE=/i.test(scriptSrc),
-  'script-src debe incluir el hash permitido para Google Identity'
-);
+assert.ok(!/sha(256|384|512)-/i.test(scriptSrc), 'script-src no debe usar hash');
 
 // 4) No nonce attrs en scripts
 assert.ok(!/\snonce\s*=/i.test(html), 'index.html no debe usar nonce en scripts');
 
 // 5) bootstrap externo existe
-assert.ok(fs.existsSync(bootFinalPath), 'Debe existir core/boot-final.js');
+assert.ok(fs.existsSync(bootProductionPath), 'Debe existir core/boot-production.js');
 
 console.log('csp-zero-inline tests passed');

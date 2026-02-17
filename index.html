@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy"
   content="
   default-src 'self';
-  script-src 'self' https://accounts.google.com https://www.gstatic.com https://cdn.jsdelivr.net 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE=';
+  script-src 'self' https://accounts.google.com https://www.gstatic.com https://cdn.jsdelivr.net;
   style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
   font-src 'self' https://fonts.gstatic.com;
   connect-src 'self' https://hqwjpjlawxrmxfcyfdbx.supabase.co https://www.googleapis.com https://accounts.google.com https://www.gstatic.com https://cdn.jsdelivr.net;
@@ -517,7 +517,7 @@
 <script defer src="ui/week.js"></script>
 <script defer src="ui/day.js"></script>
 <script defer src="ui/agenda.js"></script>
-<script defer src="core/boot-final.js"></script>
+<script defer src="./core/boot-production.js"></script>
 <script defer src="script.js"></script>
 </body>
 </html>

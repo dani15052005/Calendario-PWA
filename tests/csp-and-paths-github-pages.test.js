@@ -48,10 +48,10 @@ assert.strictEqual(
   `No debe haber rutas locales absolutas en index.html: ${absoluteLocalPaths.join(', ')}`
 );
 
-// 3) core/boot-final.js must be referenced with relative path
+// 3) core/boot-production.js must be referenced with relative path
 assert.ok(
-  /<script[^>]*\bsrc=["']core\/boot-final\.js["'][^>]*>/i.test(indexHtml),
-  'index.html debe cargar core/boot-final.js con ruta relativa'
+  /<script[^>]*\bsrc=["']\.\/core\/boot-production\.js["'][^>]*>/i.test(indexHtml),
+  'index.html debe cargar ./core/boot-production.js con ruta relativa'
 );
 
 // 4) Service Worker registration must use relative sw.js path

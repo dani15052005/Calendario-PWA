@@ -5107,7 +5107,7 @@ function sbSelectAttachmentColumns(query) {
 function getSupabaseRestTableUrl(tableName) {
   const cfg = getRuntimeAuthConfig();
   const base = String(cfg.supabaseUrl || '').trim().replace(/\/+$/, '');
-  if (!base) return `/rest/v1/${tableName}`;
+  if (!base) return `./rest/v1/${tableName}`;
   return `${base}/rest/v1/${tableName}`;
 }
 

@@ -4,7 +4,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const indexPath = path.join(root, 'index.html');
-const bootFinalPath = path.join(root, 'core', 'boot-final.js');
+const bootProductionPath = path.join(root, 'core', 'boot-production.js');
 
 const html = fs.readFileSync(indexPath, 'utf8');
 
@@ -38,6 +38,6 @@ assert.ok(
   'script-src no debe contener unsafe-inline'
 );
 
-assert.ok(fs.existsSync(bootFinalPath), 'Debe existir core/boot-final.js');
+assert.ok(fs.existsSync(bootProductionPath), 'Debe existir core/boot-production.js');
 
 console.log('csp-no-inline-scripts tests passed');
