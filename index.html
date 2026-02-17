@@ -1,0 +1,523 @@
+﻿<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy"
+  content="
+  default-src 'self';
+  script-src 'self' https://accounts.google.com https://www.gstatic.com https://cdn.jsdelivr.net 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE=';
+  style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
+  font-src 'self' https://fonts.gstatic.com;
+  connect-src 'self' https://hqwjpjlawxrmxfcyfdbx.supabase.co https://www.googleapis.com https://accounts.google.com https://www.gstatic.com https://cdn.jsdelivr.net;
+  img-src 'self' data:;
+  frame-src https://accounts.google.com;
+  base-uri 'self';
+  form-action 'self';
+  ">
+
+  <!-- Colores del navegador (adaptados a claro/oscuro) -->
+  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: dark)">
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Favicons (mantengo tus rutas actuales para no romper) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/logo-red-192.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/logo-red-192.png">
+  <!-- iOS -->
+  <link rel="apple-touch-icon" href="icons/logo-red-192.png">
+
+  <!-- Google Identity Services (para importar desde Google Calendar si lo usas) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Supabase JS (Auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+  <title>Calendario PWA</title>
+</head>
+<body class="auth-lock-pending">
+  <noscript>Esta app requiere JavaScript.</noscript>
+
+  <!-- Gate de acceso privado -->
+  <section id="authGate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authMessage">
+    <div class="auth-card">
+      <h2 id="authTitle">Acceso privado</h2>
+      <p id="authMessage" class="auth-message">Comprobando sesión…</p>
+      <p class="auth-owner">Propietario permitido: <strong>andres5871@gmail.com</strong></p>
+      <div class="auth-actions">
+        <button id="authLoginBtn" type="button" class="primary">Entrar con Google</button>
+        <button id="authLogoutBtn" type="button" class="ghost hidden">Cerrar sesión</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Topbar -->
+  <header class="topbar calendar-toolbar">
+    <div class="toolbar-left top-month-nav calendar-header" role="group" aria-label="Navegacion mensual">
+      <button id="menuBtn" class="hamburger" aria-label="Abrir menu" aria-expanded="false" aria-controls="drawer">
+        <span></span><span></span><span></span>
+      </button>
+      <img id="cornerBrand" class="app-logo mini-calendar-icon" src="icons/logo-dark@3x.png" alt="Logo calendario" width="28" height="28" />
+      <button id="todayBtn" class="primary month-today-btn" aria-label="Ir a hoy">Hoy</button>
+      <button id="prevMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes anterior">&#9664;</button>
+    </div>
+
+    <div class="toolbar-center">
+      <h1 class="app-title" id="currentMonthLabel" aria-live="polite">mayo 2026</h1>
+    </div>
+
+    <div class="toolbar-right">
+      <div id="syncStatusPill" class="sync-status-pill" role="status" aria-live="polite">Sync OK · Pendientes: 0 · Último: --</div>
+      <button id="nextMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes siguiente">&#9654;</button>
+      <form class="search-wrap" id="searchWrap" role="search">
+        <input
+          id="searchInput"
+          class="calendar-search"
+          type="search"
+          placeholder='Buscar... ej. "reunion", "Madrid", "Ana"'
+          aria-label="Buscar eventos"
+          autocomplete="off" />
+        <button id="clearSearch" type="button" class="ghost" title="Limpiar busqueda" aria-label="Limpiar busqueda">x</button>
+        <div id="searchResults" class="search-results" aria-live="polite"></div>
+      </form>
+    </div>
+  </header>
+
+  <!-- Drawer lateral -->
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Opciones</h2>
+      <button id="closeDrawer" class="ghost" aria-label="Cerrar menú">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Vista</h3>
+      <div class="segmented" role="radiogroup" aria-label="Cambiar vista del calendario">
+        <label><input type="radio" name="viewMode" value="month" checked /> Mes</label>
+        <label><input type="radio" name="viewMode" value="week" /> Semana</label>
+        <label><input type="radio" name="viewMode" value="3days" /> 3 días</label>
+        <label><input type="radio" name="viewMode" value="day" /> Día</label>
+        <label><input type="radio" name="viewMode" value="agenda" /> Agenda</label>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Filtrar por categoría</h3>
+      <div class="checks">
+        <label><input type="checkbox" class="cat-filter" value="Trabajo" checked /> Trabajo</label>
+        <label><input type="checkbox" class="cat-filter" value="Evento" checked /> Evento</label>
+        <label><input type="checkbox" class="cat-filter" value="Citas" checked /> Citas</label>
+        <label><input type="checkbox" class="cat-filter" value="Cumpleaños" checked /> Cumpleaños</label>
+        <label><input type="checkbox" class="cat-filter" value="Otros" checked /> Otros</label>
+        <label><input type="checkbox" class="cat-filter" value="Festivo" checked /> Festivo</label>
+      </div>
+      <button id="toggleAllCats" class="small" aria-label="Marcar o desmarcar todas las categorías">Marcar/Desmarcar todos</button>
+    </div>
+
+    <div class="drawer-section" id="calendarFiltersSection">
+      <h3>Calendarios</h3>
+      <div id="calendarFilterList" class="checks" aria-live="polite"></div>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Tema</h3>
+      <button id="themeToggle" class="theme-toggle">Cambiar a Light</button>
+    </div>
+    <div class="drawer-footer" id="drawerFooter">
+  <span class="muted">Versión</span>
+  <strong id="appVersionLabel">v-</strong>
+</div>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+  <main class="layout" role="main">
+    <!-- Vista MES -->
+    <section id="monthView" class="calendar-panel" aria-label="Calendario mensual">
+            <div class="calendar-nav calendar-header" role="toolbar" aria-label="Navegacion de calendario">
+        <div class="nav-left">
+          <button id="prevYear" aria-label="Ano anterior">&laquo; Ano</button>
+          <button id="prevMonth" aria-label="Mes anterior">&lsaquo; Mes</button>
+        </div>
+        <div class="nav-center"></div>
+        <div class="nav-right">
+          <button id="nextMonth" aria-label="Mes siguiente">Mes &rsaquo;</button>
+          <button id="nextYear" aria-label="Ano siguiente">Ano &raquo;</button>
+        </div>
+      </div>
+      <div class="jump-row">
+        <label for="jumpDate">Ir a fecha: </label>
+        <input id="jumpDate" type="date" />
+        <button id="jumpBtn" aria-label="Ir a la fecha seleccionada en el calendario" aria-controls="calendarGrid">Ir</button>
+      </div>
+
+      <div class="weekday-row" aria-hidden="true">
+        <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+      </div>
+
+      <div id="calendarGrid" class="calendar-grid" aria-live="polite"></div>
+    </section>
+
+    <!-- Vista de TIEMPO (Semana / 3 días / Día) -->
+    <section id="timeView" class="time-panel hidden" aria-label="Vista de tiempo">
+      <header class="time-header">
+        <button id="backToMonth" class="ghost" aria-label="Volver a vista mes">← Mes</button>
+        <div id="timeRangeTitle" class="time-title">—</div>
+      </header>
+
+      <!-- Cabecera de días -->
+      <div id="weekViewShell" class="week-view">
+        <div id="timeDaysHeader" class="time-days-header week-header"></div>
+
+      <!-- Grid de horas y eventos -->
+      <div id="timeGrid" class="time-grid week-body"></div>
+      </div>
+
+      <!-- Mensaje vacío solo para vista Día -->
+      <div id="dayEmptyMsg" class="empty hidden">Aún no hay eventos para este día</div>
+
+      <!-- Vista Agenda -->
+      <div id="agendaListView" class="agenda-list-view hidden" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <!-- FAB principal -->
+  <button id="globalAddFab" class="fab" title="Añadir evento" aria-label="Añadir evento">
+    <!-- + -->
+    <svg class="icon icon-plus" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H6a1 1 0 1 1 0-2h5V6a1 1 0 0 1 1-1z"/>
+    </svg>
+    <!-- calendario (aparece al abrir) -->
+    <svg class="icon icon-cal hidden" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1zM5 10h14v8H5zM5 8h14V6H5z"/>
+    </svg>
+  </button>
+
+  <!-- Menú del FAB (speed-dial) -->
+  <div id="fabMenu" class="fab-menu" aria-hidden="true">
+    <!-- Cumpleaños: mini tarta -->
+    <button id="fabBirthday" class="fab-mini" title="Añadir cumpleaños" aria-label="Añadir cumpleaños">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 6v3" />
+        <path d="M12 3c1.3 1.2 1.3 2.8 0 4c-1.3-1.2-1.3-2.8 0-4z"/>
+        <path d="M3 12c1 .9 2 .9 3 0s2-.9 3 0 2 .9 3 0 2-.9 3 0 2 .9 3 0 2-.9 3 0" />
+        <rect x="3" y="12" width="18" height="5" rx="1" ry="1"/>
+      </svg>
+      <span>Cumpleaños</span>
+    </button>
+
+    <!-- Tarea: folio con lápiz -->
+    <button id="fabTask" class="fab-mini" title="Añadir evento" aria-label="Añadir evento">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 3h7l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+        <path d="M15 3v4h4"/>
+        <path d="M7 17l7.5-7.5 3 3L10 20H7z"/>
+        <path d="M14.5 9.5l2 2"/>
+      </svg>
+      <span>Evento</span>
+    </button>
+  </div>
+
+  <!-- Sheet / Panel para Añadir/Editar evento -->
+<section id="addEventSheet" class="sheet hidden" aria-label="Añadir o editar evento">
+  <header class="sheet-head">
+    <h3 id="sheetTitle">Añadir evento</h3>
+    <button id="closeSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
+
+  <form id="eventForm" class="event-form list-form" novalidate>
+    <input type="hidden" id="eventId" />
+    <input type="hidden" id="duplicateFromId" />
+
+    <!-- Título -->
+    <input id="eventTitle" class="title-input" type="text" required placeholder="Título" />
+
+    <!-- Todo el día -->
+    <div class="row row-toggle">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path>
+      </svg>
+      <label for="eventAllDay" class="row-label">Todo el día</label>
+      <input id="eventAllDay" type="checkbox" class="switch" role="switch" aria-label="Todo el día" />
+    </div>
+
+    <!-- Inicio → Fin -->
+    <div class="row row-daterange" id="rowDateTime">
+      <div class="dt start">
+        <div class="dt-line">
+          <input id="eventStartDate" type="date" required />
+          <input id="eventStartTime" type="time" required />
+        </div>
+        <small class="muted">inicio</small>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="dt end">
+        <div class="dt-line">
+          <input id="eventEndDate" type="date" />
+          <input id="eventEndTime" type="time" />
+        </div>
+        <small class="muted">fin</small>
+      </div>
+    </div>
+
+    <!-- Ubicación -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 21s-6-5.33-6-10a6 6 0 1 1 12 0c0 4.67-6 10-6 10z"></path>
+        <circle cx="12" cy="11" r="2.5"></circle>
+      </svg>
+      <input id="eventLocation" type="text" placeholder="Ubicación" />
+    </div>
+
+    <!-- URL -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10 5"></path>
+        <path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L14 19"></path>
+      </svg>
+      <input id="eventUrl" type="url" placeholder="URL (opcional)" inputmode="url" />
+    </div>
+
+    <!-- Color -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 22a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path>
+        <path d="M12 6V2"></path>
+      </svg>
+      <label class="row-label" for="eventColor">Color</label>
+      <input id="eventColor" type="color" class="row-value" value="#3b82f6" />
+    </div>
+
+    <div class="row" id="eventCalendarRow">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="16" rx="2" ry="2"></rect>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+        <line x1="8" y1="3" x2="8" y2="7"></line>
+        <line x1="16" y1="3" x2="16" y2="7"></line>
+      </svg>
+      <label class="row-label" for="eventGoogleCalendar">Calendario</label>
+      <select id="eventGoogleCalendar" class="row-value"></select>
+    </div>
+
+    <!-- Alerta -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path>
+      </svg>
+      <label class="row-label" for="eventAlert">Alerta</label>
+      <select id="eventAlert" class="row-value">
+        <option value="none">Sin alerta</option>
+        <option value="at">A la hora del evento</option>
+        <option value="10m">10 minutos antes</option>
+        <option value="30m">30 minutos antes</option>
+        <option value="1h">1 hora antes</option>
+        <option value="1d">1 día antes</option>
+      </select>
+    </div>
+
+    <!-- No repetir -->
+    <div class="row">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+        <path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+      </svg>
+      <label class="row-label" for="eventRepeat">No repetir</label>
+      <select id="eventRepeat" class="row-value">
+        <option value="none">No repetir</option>
+        <option value="daily">Cada día</option>
+        <option value="weekly">Cada semana</option>
+        <option value="monthly">Cada mes</option>
+        <option value="yearly">Cada año</option>
+      </select>
+    </div>
+
+    <!-- Notas -->
+    <div class="row row-notes">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22h11A2.5 2.5 0 0 0 20 19.5V7l-5-5H6.5A2.5 2.5 0 0 0 4 4.5z"></path>
+        <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+      </svg>
+      <textarea id="eventNotes" placeholder="Notas"></textarea>
+    </div>
+
+    <!-- Adjuntos para móvil: cámara / galería / archivos -->
+    <div class="row file-row" id="fileRowCamera">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.12 17.32a2 2 0 0 1-2.83-2.83L16.26 5.5"></path>
+      </svg>
+      <button id="pickCameraBtn" type="button" class="row-link">Cámara</button>
+      <input id="eventFilesCamera" type="file" accept="image/*" capture="environment" hidden />
+    </div>
+
+    <div class="row file-row" id="fileRowGallery">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.12 17.32a2 2 0 0 1-2.83-2.83L16.26 5.5"></path>
+      </svg>
+      <button id="pickGalleryBtn" type="button" class="row-link">Galería</button>
+      <input id="eventFilesGallery" type="file" accept="image/*,video/*" multiple hidden />
+    </div>
+
+    <div class="row file-row" id="fileRowFiles">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.12 17.32a2 2 0 0 1-2.83-2.83L16.26 5.5"></path>
+      </svg>
+      <button id="pickFilesBtn" type="button" class="row-link">Archivos</button>
+      <input id="eventFilesFiles" type="file" multiple hidden />
+    </div>
+
+    <!-- Previsualización (se mantiene) -->
+    <div id="attachmentsPreview" class="attachments-preview"></div>
+    
+    <menu class="dialog-actions">
+      <button type="button" id="duplicateEventBtn" class="ghost hidden">Duplicar</button>
+      <button type="button" id="deleteEventBtn" class="danger hidden">Eliminar</button>
+      <div class="spacer"></div>
+      <button type="button" id="cancelEventBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
+
+  <!-- Sheet / Panel para Añadir CUMPLEAÑOS -->
+<section id="addBirthdaySheet" class="sheet hidden" aria-label="Añadir cumpleaños">
+  <header class="sheet-head">
+    <h3>Añadir cumpleaños</h3>
+    <button id="closeBirthdaySheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
+
+  <form id="birthdayForm" class="event-form" novalidate>
+    <input type="hidden" name="id" />
+
+    <label for="birthdayDate">Fecha *</label>
+    <input id="birthdayDate" name="date" type="date" required />
+
+    <label for="birthdayTime">Hora *</label>
+    <input id="birthdayTime" name="time" type="time" required value="10:00" />
+
+    <label for="birthdayTitle">Nombre *</label>
+    <input id="birthdayTitle" name="title" type="text" required placeholder="Cumple de…" />
+
+    <label for="birthdayLocation">Ubicación</label>
+    <input id="birthdayLocation" name="location" type="text" placeholder="Lugar de la celebración" />
+
+    <label for="birthdayClient">Persona</label>
+    <input id="birthdayClient" name="client" type="text" placeholder="Nombre de la persona" />
+
+    <label for="birthdayFiles">Adjuntos</label>
+    <input id="birthdayFiles" name="files" type="file" multiple />
+
+    <menu class="dialog-actions">
+      <div class="spacer"></div>
+      <button type="button" id="cancelBirthdayBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
+
+  <!-- Sheet / Panel para Añadir TAREA -->
+<section id="addTaskSheet" class="sheet hidden" aria-label="Añadir evento">
+  <header class="sheet-head">
+    <h3>Añadir evento</h3>
+    <button id="closeTaskSheet" class="ghost" aria-label="Cerrar panel">✕</button>
+  </header>
+
+  <form id="taskForm" class="event-form" novalidate>
+    <input type="hidden" name="id" />
+
+    <label for="taskDate">Fecha *</label>
+    <input id="taskDate" name="date" type="date" required />
+
+    <label for="taskTime">Hora *</label>
+    <input id="taskTime" name="time" type="time" required value="10:00" />
+
+    <label for="taskTitle">Título del evento *</label>
+    <input id="taskTitle" name="title" type="text" required placeholder="Evento…" />
+
+    <label for="taskLocation">Ubicación</label>
+    <input id="taskLocation" name="location" type="text" placeholder="Oficina, domicilio…" />
+
+    <label for="taskClient">Cliente (opcional)</label>
+    <input id="taskClient" name="client" type="text" placeholder="Nombre del cliente" />
+
+    <label for="taskFiles">Adjuntos</label>
+    <input id="taskFiles" name="files" type="file" multiple />
+
+    <menu class="dialog-actions">
+      <div class="spacer"></div>
+      <button type="button" id="cancelTaskBtn" class="ghost">Cancelar</button>
+      <button type="submit" class="primary">Guardar</button>
+    </menu>
+  </form>
+</section>
+
+  <!-- Templates -->
+<template id="pillTpl">
+  <div class="event-pill calendar-event event-card">
+    <span class="pill-title"></span>
+    <span class="pill-time"></span>
+  </div>
+</template>
+
+<!-- ===== Force Update Gate ===== -->
+<section id="updateGate" class="update-gate hidden" role="dialog" aria-modal="true" aria-labelledby="updTitle" aria-describedby="updDesc" aria-hidden="true">
+  <div class="ug-backdrop">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+  </div>
+
+  <div class="ug-card">
+    <header class="ug-head">
+      <svg class="ug-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2a10 10 0 1 0 .001 20.001A10 10 0 0 0 12 2zm1 5v6a1 1 0 0 1-2 0V7a1 1 0 1 1 2 0zm-1 10.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+      </svg>
+      <h3 id="updTitle">Actualización disponible</h3>
+    </header>
+
+    <p id="updDesc" class="ug-text">
+      Para seguir usando la app necesitas actualizar a la última versión.
+    </p>
+
+    <div class="ug-meta">
+      <span id="currentVer" class="tag">Actual: —</span>
+      <span id="requiredVer" class="tag">Requerida: —</span>
+    </div>
+
+    <button id="updateNowBtn" class="ug-btn primary">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Actualizar ahora</span>
+    </button>
+
+    <a id="releaseNotesLink" class="ug-link" href="#" target="_blank" rel="noopener">Ver novedades</a>
+  </div>
+</section>
+
+<script src="app-config.js"></script>
+<script src="auth-helpers.js"></script>
+<script defer src="utils/helpers.js"></script>
+<script defer src="core/state.js"></script>
+<script defer src="core/auth.js"></script>
+<script defer src="data/queries.js"></script>
+<script defer src="data/supabase.js"></script>
+<script defer src="sync/reconcile.js"></script>
+<script defer src="sync/google-sync.js"></script>
+<script defer src="attachments/drive.js"></script>
+<script defer src="reminders/reminders.js"></script>
+<script defer src="ui/month.js"></script>
+<script defer src="ui/week.js"></script>
+<script defer src="ui/day.js"></script>
+<script defer src="ui/agenda.js"></script>
+<script defer src="/core/boot-final.js"></script>
+<script defer src="script.js"></script>
+</body>
+</html>

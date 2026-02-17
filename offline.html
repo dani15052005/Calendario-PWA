@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0ea5e9" />
+  <meta name="robots" content="noindex" />
+  <title>Sin conexión • Calendario</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#12182c; --text:#e6ecff; --muted:#93a2bf; --primary:#0ea5e9;
+      --border:rgba(255,255,255,.1); --border2:rgba(255,255,255,.18);
+    }
+    /* Light mode automático si el sistema es claro */
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f6f7fb; --panel:#ffffff; --text:#0b1220; --muted:#5b6377; --primary:#0ea5e9;
+        --border:rgba(17,24,39,.1); --border2:rgba(17,24,39,.18);
+      }
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;
+      background:var(--bg); color:var(--text); display:grid; place-items:center;
+    }
+    main{ width:min(560px,92vw) }
+    .card{
+      background:var(--panel); border:1px solid var(--border);
+      border-radius:1rem; padding:1.25rem;
+    }
+    h1{margin:.2rem 0 0 0; font-size:1.35rem}
+    p{color:var(--muted); line-height:1.5}
+    .actions{display:flex; gap:.5rem; margin-top:.75rem; flex-wrap:wrap}
+    a,button{
+      appearance:none; text-decoration:none; cursor:pointer;
+      background:var(--primary); color:white; border:0; border-radius:.6rem;
+      padding:.6rem .9rem; font-weight:600;
+    }
+    a.secondary, button.secondary{
+      background:transparent; color:var(--text); border:1px solid var(--border2)
+    }
+    .icon{font-size:2rem}
+    .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" role="status" aria-live="polite">
+      <div class="icon" aria-hidden="true">📴</div>
+      <h1>Estás sin conexión</h1>
+      <p>
+        No hemos podido acceder a la red. Puedes seguir consultando los eventos y archivos
+        que ya estén en tu dispositivo. Cuando vuelva la conexión, te devolveremos al calendario.
+      </p>
+      <div class="actions">
+        <a href="./">Volver al calendario</a>
+        <button id="retryBtn" class="secondary">Reintentar</button>
+        <span id="onlineHint" class="sr-only" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  // Reintentar carga
+  var rb = document.getElementById('retryBtn');
+  if (rb) rb.addEventListener('click', function(){ location.reload(); });
+
+  // Si vuelve la conexión, redirige sola al calendario
+  function goIfOnline() {
+    if (navigator.onLine) {
+      var hint = document.getElementById('onlineHint');
+      if (hint) hint.textContent = 'Conexión recuperada. Redirigiendo…';
+      // pequeño delay para que el SW/Cache esté listo
+      setTimeout(function(){ location.replace('./'); }, 250);
+    }
+  }
+  window.addEventListener('online', goIfOnline);
+  // Por si llega ya con conexión restablecida
+  goIfOnline();
+</script>
+</body>
+</html>

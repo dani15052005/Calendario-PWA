@@ -1,0 +1,33 @@
+{
+  "id": "./",
+  "name": "Calendario PWA",
+  "short_name": "Calendario",
+  "description": "Calendario estilo Google Calendar con búsqueda, adjuntos y soporte offline.",
+  "lang": "es-ES",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0ea5e9",
+  "orientation": "any",
+  "categories": ["productivity"],
+  "icons": [
+  { "src": "icons/logo-red-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+  { "src": "icons/logo-red-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+],
+"shortcuts": [
+  {
+    "name": "Añadir evento (hoy)",
+    "short_name": "Nuevo hoy",
+    "url": "./?action=new",
+    "icons": [{ "src": "icons/logo-red-192.png", "sizes": "192x192" }]
+  },
+  {
+    "name": "Ver semana",
+    "short_name": "Semana",
+    "url": "./?view=week",
+    "icons": [{ "src": "icons/logo-red-192.png", "sizes": "192x192" }]
+  }
+ ]
+}
