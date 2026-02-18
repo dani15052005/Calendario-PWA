@@ -4,7 +4,6 @@ console.log('[Calendario] JS cargado');
 window.__APP_VERSION__ = '1.2.19';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://hqwjpjlawxrmxfcyfdbx.supabase.co';
-const EXPECTED_OWNER_POLICY_RPC = 'check_owner_policy_active';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
 const GOOGLE_OAUTH_SIGNIN_SCOPES = [
   'openid',
@@ -21,10 +20,6 @@ let _authBlockedByEmail = false;
 let _supabaseUserRowEnsuredFor = null;
 let _supabaseDebugLogged = false;
 let _logoutInProgress = false;
-let _ownerPolicyFatalInvalid = false;
-let _ownerPolicyLastTransientError = null;
-let _ownerPolicyProbePassed = false;
-let _ownerPolicyProbeInFlight = null;
 let _googleSyncBlocked = true;
 let _googleSyncInFlight = false;
 let _syncAbortRequested = false;
@@ -246,39 +241,24 @@ function extractSupabaseProjectRef(url){
   }
 }
 
-function buildOwnerPolicyRpcEndpoint(url, rpcName = EXPECTED_OWNER_POLICY_RPC){
-  const base = String(url || '').trim().replace(/\/+$/, '');
-  const name = String(rpcName || EXPECTED_OWNER_POLICY_RPC).trim();
-  if (!base || !name) return '';
-  return `${base}/rest/v1/rpc/${name}`;
-}
-
 function debugSupabaseTarget(inputCfg = null){
   if (!shouldDebugSupabaseTarget()) return;
   if (_supabaseDebugLogged) return;
   _supabaseDebugLogged = true;
   try {
     const runtimeCfg = inputCfg || getRuntimeAuthConfig();
-    const cfg = window.__APP_CONFIG__ || {};
     const url = String(runtimeCfg.supabaseUrl || '').trim();
     const key = String(runtimeCfg.supabaseAnonKey || '').trim();
-    const rpcName = String(cfg.OWNER_POLICY_CHECK_RPC || EXPECTED_OWNER_POLICY_RPC).trim() || EXPECTED_OWNER_POLICY_RPC;
     const ref = extractSupabaseProjectRef(url);
-    const rpcEndpoint = buildOwnerPolicyRpcEndpoint(url, rpcName);
-    const expectedRpcEndpoint = buildOwnerPolicyRpcEndpoint(EXPECTED_SUPABASE_PROJECT_URL, EXPECTED_OWNER_POLICY_RPC);
     const urlMatchesExpected = url === EXPECTED_SUPABASE_PROJECT_URL;
-    const rpcMatchesExpected = rpcEndpoint === expectedRpcEndpoint;
 
     console.info('[SUPABASE DEBUG]');
     console.info('URL:', url);
     console.info('Project Ref:', ref);
     console.info('Key present:', !!key);
-    console.info('RPC endpoint:', rpcEndpoint);
-    console.info('Expected RPC endpoint:', expectedRpcEndpoint);
     console.info('URL matches expected:', urlMatchesExpected);
-    console.info('RPC matches expected:', rpcMatchesExpected);
 
-    const verified = urlMatchesExpected && rpcMatchesExpected && !!key;
+    const verified = urlMatchesExpected && !!key;
     console.info('[SUPABASE CONFIG VERIFIED]', verified);
     if (!verified) {
       console.warn('[SUPABASE CONFIG MISMATCH]');
@@ -299,159 +279,6 @@ function isSupabaseConfigReady(cfg){
 function getOwnerEmail(){
   const cfg = getRuntimeAuthConfig();
   return String(cfg.ownerEmail || OWNER_EMAIL_FALLBACK);
-}
-
-function isProductionEnvironment() {
-  const cfg = window.__APP_CONFIG__ || {};
-  const explicit = String(cfg.APP_ENV || cfg.NODE_ENV || cfg.ENV || '').trim().toLowerCase();
-  if (explicit) return explicit === 'production' || explicit === 'prod';
-  const host = String(window.location.hostname || '').trim().toLowerCase();
-  if (!host) return false;
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
-  if (host.endsWith('.local') || host.endsWith('.test')) return false;
-  return true;
-}
-
-function normalizeOwnerPolicyProbeResult(raw) {
-  const payload = Array.isArray(raw) ? (raw[0] || null) : raw;
-  if (typeof payload === 'boolean') {
-    return {
-      ok: payload === true,
-      wrongEmailBlocked: payload === true,
-      source: 'boolean'
-    };
-  }
-  if (!payload || typeof payload !== 'object') {
-    return { ok: false, wrongEmailBlocked: false, source: 'invalid_payload' };
-  }
-
-  const ok = payload.ok === true
-    || payload.policy_active === true
-    || payload.owner_policy_active === true
-    || payload.rls_owner_email_active === true;
-
-  const wrongVisibleRaw = payload.wrong_email_visible_rows;
-  const wrongVisible = Number.isFinite(Number(wrongVisibleRaw)) ? Number(wrongVisibleRaw) : null;
-  const wrongEmailBlocked = payload.wrong_email_blocked === true
-    || payload.probe_denied === true
-    || payload.wrong_email_denied === true
-    || payload.wrong_email_select_denied === true
-    || wrongVisible === 0;
-
-  return {
-    ok,
-    wrongEmailBlocked,
-    source: 'object',
-    raw: payload
-  };
-}
-
-function classifyOwnerPolicyCheckFailure(verdict) {
-  const reason = String(verdict.reason || 'unknown');
-  if (reason === 'supabase_unavailable') {
-    return { fatal: false, reason };
-  }
-  if (reason === 'rpc_failed') {
-    const code = String(verdict.code || '').trim();
-    const msg = String(verdict.message || '').toLowerCase();
-    const rpcMissing = code === '42883'
-      || (msg.includes('check_owner_policy_active') && msg.includes('does not exist'));
-    return { fatal: rpcMissing, reason: rpcMissing ? 'rpc_missing' : reason };
-  }
-  if (reason === 'missing_rpc_name' || reason === 'missing_owner_email') {
-    return { fatal: true, reason };
-  }
-  return { fatal: true, reason };
-}
-
-async function checkOwnerPolicyActive() {
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    return { ok: false, reason: 'supabase_unavailable' };
-  }
-
-  const cfg = window.__APP_CONFIG__ || {};
-  const rpcName = String(cfg.OWNER_POLICY_CHECK_RPC || EXPECTED_OWNER_POLICY_RPC).trim();
-  const ownerEmail = String(getOwnerEmail() || '').trim().toLowerCase();
-  const wrongEmailProbe = `rls-probe-${Date.now()}@example.invalid`;
-
-  if (!rpcName) {
-    return { ok: false, reason: 'missing_rpc_name' };
-  }
-  if (!ownerEmail) {
-    return { ok: false, reason: 'missing_owner_email' };
-  }
-
-  const payloadVariants = [
-    { expected_owner_email: ownerEmail, probe_wrong_email: wrongEmailProbe },
-    { owner_email: ownerEmail, wrong_email: wrongEmailProbe },
-    { ownerEmail, wrongEmail: wrongEmailProbe },
-    {}
-  ];
-
-  let rpcData = null;
-  let rpcError = null;
-  for (const args of payloadVariants) {
-    const result = await supabase.rpc(rpcName, args);
-    if (!result.error) {
-      rpcData = result.data;
-      rpcError = null;
-      break;
-    }
-    rpcError = result.error;
-  }
-
-  if (rpcError) {
-    return {
-      ok: false,
-      reason: 'rpc_failed',
-      code: rpcError.code || null,
-      message: rpcError.message || String(rpcError)
-    };
-  }
-
-  const parsed = normalizeOwnerPolicyProbeResult(rpcData);
-  if (!parsed.ok || !parsed.wrongEmailBlocked) {
-    return {
-      ok: false,
-      reason: 'rpc_negative',
-      details: parsed
-    };
-  }
-
-  return { ok: true, details: parsed };
-}
-
-async function ensureOwnerPolicyActiveInProduction() {
-  if (!isProductionEnvironment()) {
-    return { ok: true, skipped: 'non_production' };
-  }
-  if (_ownerPolicyProbePassed) {
-    return { ok: true, cached: true };
-  }
-  if (_ownerPolicyProbeInFlight) {
-    return _ownerPolicyProbeInFlight;
-  }
-
-  _ownerPolicyProbeInFlight = (async () => {
-    const verdict = await checkOwnerPolicyActive();
-    if (!verdict.ok) {
-      const kind = classifyOwnerPolicyCheckFailure(verdict);
-      const err = new Error(`owner_policy_check_failed:${kind.reason}`);
-      err.code = kind.fatal ? 'OWNER_POLICY_FATAL' : 'OWNER_POLICY_TRANSIENT';
-      err.reason = kind.reason;
-      err.verdict = verdict;
-      throw err;
-    }
-    _ownerPolicyFatalInvalid = false;
-    _ownerPolicyLastTransientError = null;
-    _ownerPolicyProbePassed = true;
-    return verdict;
-  })().finally(() => {
-    _ownerPolicyProbeInFlight = null;
-  });
-
-  return _ownerPolicyProbeInFlight;
 }
 
 function setAuthGateState(message, kind = 'info', { showLogin = true, showLogout = false } = {}){
@@ -511,10 +338,6 @@ function getSupabaseClient(){
     const projectRef = match ? match[1] : null;
 
     console.log("Extracted project ref:", projectRef);
-    console.log(
-      "RPC endpoint constructed:",
-      normalized + "/rest/v1/rpc/check_owner_policy_active"
-    );
   }
 
   console.log("==== END SUPABASE DIAGNOSTIC ====");
@@ -655,9 +478,6 @@ async function signOutSupabase({ silent = false } = {}){
       lockAppUI(`No se pudo cerrar la sesion actual: ${signOutError.message || signOutError}`, 'error', { showLogin: true, showLogout: false });
     }
 
-    _ownerPolicyProbePassed = false;
-    _ownerPolicyProbeInFlight = null;
-    _ownerPolicyLastTransientError = null;
     _supabaseUserRowEnsuredFor = null;
   } finally {
     _logoutInProgress = false;
@@ -812,18 +632,8 @@ async function enforcePrivateOwnerSession(session){
     ? MODULE_CORE_AUTH.getSessionUser(session)
     : (session?.user || null);
 
-  if (_ownerPolicyFatalInvalid) {
-    _googleSyncBlocked = true;
-    lockAppUI('Error de configuración de seguridad en backend.', 'error', { showLogin: false, showLogout: false });
-    return false;
-  }
-
   if (!session || !sessionUser) {
     clearGoogleRuntimeState({ clearPreferences: false });
-    if (_ownerPolicyFatalInvalid) {
-      lockAppUI('Error de configuración de seguridad en backend.', 'error', { showLogin: false, showLogout: false });
-      return false;
-    }
     if (_authBlockedByEmail) {
       lockAppUI(
         `Acceso bloqueado. Solo se permite ${ownerEmail}.`,
@@ -868,29 +678,6 @@ async function enforcePrivateOwnerSession(session){
       { showLogin: true, showLogout: false }
     );
     await signOutSupabase({ silent: true });
-    return false;
-  }
-
-  try {
-    await ensureOwnerPolicyActiveInProduction();
-  } catch (err) {
-    _googleSyncBlocked = true;
-    if (err.code === 'OWNER_POLICY_FATAL') {
-      _ownerPolicyFatalInvalid = true;
-      lockAppUI('Error de configuración de seguridad en backend.', 'error', { showLogin: false, showLogout: false });
-      await signOutSupabase({ silent: true });
-    } else {
-      _ownerPolicyLastTransientError = {
-        reason: err.reason || 'unknown',
-        at: Date.now()
-      };
-      lockAppUI(
-        'No se pudo verificar la seguridad del backend en este momento. Reintenta iniciar sesión.',
-        'error',
-        { showLogin: true, showLogout: false }
-      );
-      await signOutSupabase({ silent: true });
-    }
     return false;
   }
 
