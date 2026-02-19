@@ -66,13 +66,13 @@
   </section>
 
   <!-- Topbar -->
-  <header class="topbar calendar-toolbar month-toolbar">
+  <header class="topbar calendar-toolbar month-toolbar header toolbar">
     <div class="toolbar-left top-month-nav calendar-header" role="group" aria-label="Navegacion mensual">
       <button id="menuBtn" class="hamburger" aria-label="Abrir menu" aria-expanded="false" aria-controls="drawer">
         <span></span><span></span><span></span>
       </button>
       <img id="cornerBrand" class="app-logo mini-calendar-icon" src="icons/logo-dark@3x.png" alt="Logo calendario" width="28" height="28" />
-      <button id="todayBtn" class="primary month-today-btn" aria-label="Ir a hoy">Hoy</button>
+      <button id="todayBtn" class="primary month-today-btn today-button" aria-label="Ir a hoy">Hoy</button>
       <button id="prevMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes anterior">&#9664;</button>
     </div>
 
@@ -154,7 +154,7 @@
 
   <main class="layout" role="main">
     <!-- Vista MES -->
-    <section id="monthView" class="calendar-panel" aria-label="Calendario mensual">
+    <section id="monthView" class="calendar-panel calendar-container month-view" aria-label="Calendario mensual">
             <div class="calendar-nav calendar-header" role="toolbar" aria-label="Navegacion de calendario">
         <div class="nav-left">
           <button id="prevYear" aria-label="Ano anterior">&laquo; Ano</button>

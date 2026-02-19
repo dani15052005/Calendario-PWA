@@ -2760,102 +2760,136 @@ html[data-theme="light"] #timeView .day-col {
    ============================================================ */
 @media (max-width: 768px) {
   body {
+    overflow: hidden !important;
     height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden !important;
     display: flex;
     flex-direction: column;
   }
 
   .layout {
     height: 100dvh;
-    flex: 1 1 auto;
-    min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    flex: 1 1 auto;
+    min-height: 0 !important;
     overflow: hidden !important;
     gap: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
   }
 
+  .header,
+  .toolbar,
   .month-toolbar,
   .topbar.calendar-toolbar {
     flex: 0 0 auto;
+    min-height: 0;
     width: 100%;
     margin: 0 !important;
-    padding: 6px 8px;
-    display: grid;
-    grid-template-columns: 48px 1fr 48px 42px;
+    padding: 6px 8px !important;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
 
-  .month-toolbar .toolbar-left,
-  .month-toolbar .toolbar-right {
-    display: contents;
+  .toolbar-left,
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: 0;
   }
 
-  .month-toolbar .toolbar-center {
-    grid-column: 2;
+  .toolbar-center {
+    flex: 1 1 auto;
+    min-width: 0;
     position: static !important;
     transform: none !important;
     pointer-events: auto !important;
-    min-width: 0;
     display: flex;
     justify-content: center;
+    align-items: center;
   }
 
-  .month-toolbar .month-title,
-  .month-toolbar #currentMonthLabel {
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .month-title,
+  #currentMonthLabel {
     width: 100%;
     margin: 0;
     text-align: center;
     font-weight: 600;
+    font-size: 1rem;
   }
 
-  .month-toolbar #prevMonthBtn {
-    grid-column: 1;
-    justify-self: center;
+  .hamburger,
+  .today-button,
+  #prevMonthBtn,
+  #nextMonthBtn,
+  .search-icon-only-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
   }
 
-  .month-toolbar #nextMonthBtn {
-    grid-column: 3;
-    justify-self: center;
-  }
-
-  .month-toolbar .search-container,
-  .month-toolbar #searchWrap {
-    grid-column: 4;
-    justify-self: end;
-  }
-
-  #menuBtn,
-  #cornerBrand,
-  #todayBtn,
-  #syncStatusPill {
+  #syncStatusPill,
+  #cornerBrand {
     display: none !important;
+  }
+
+  .calendar-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
   }
 
   .calendar-panel,
   .time-panel,
-  .calendar-container,
   .month-view,
   #monthView,
   #timeView,
   #weekViewShell {
-    flex: 1 1 auto;
-    min-height: 0 !important;
     width: 100% !important;
-    overflow: hidden !important;
+    min-height: 0 !important;
+    margin: 0 !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    margin: 0 !important;
     border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #monthView.calendar-container.month-view {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
 
   .calendar-grid,
-  #calendarGrid,
+  #calendarGrid {
+    width: 100% !important;
+    min-width: 100% !important;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    gap: 0 !important;
+  }
+
   .month-view,
   #monthView .weekday-row,
   #timeView #timeDaysHeader,
@@ -2865,14 +2899,6 @@ html[data-theme="light"] #timeView .day-col {
     padding-left: 0 !important;
     padding-right: 0 !important;
     margin: 0 !important;
-  }
-
-  .calendar-grid,
-  #calendarGrid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr) !important;
-    overflow: hidden !important;
-    gap: 0 !important;
   }
 
   #timeDaysHeader,
@@ -2891,6 +2917,19 @@ html[data-theme="light"] #timeView .day-col {
   .mobile-month-switcher,
   .view-switcher {
     display: none !important;
+  }
+
+  .calendar-day,
+  .day,
+  .day-cell {
+    min-height: 0 !important;
+    height: calc((100dvh - 160px) / 6);
+  }
+
+  .calendar-day .events-container,
+  .calendar-day .events-tags,
+  .day .events-tags {
+    overflow: hidden !important;
   }
 
   #calendarGrid .day,
@@ -2917,23 +2956,30 @@ html[data-theme="light"] #timeView .day-col {
     width: 100%;
   }
 
-  .month-toolbar .search-container:focus-within,
-  .month-toolbar .search-container.active {
-    grid-column: 1 / -1;
-    justify-self: stretch;
+  .search-wrap.search-icon-only {
+    width: 2.2rem !important;
+    min-width: 2.2rem;
+    max-width: 2.2rem;
+  }
+
+  .search-wrap.search-icon-only:focus-within,
+  .search-wrap.search-icon-only.active {
+    width: min(66vw, 280px) !important;
+    max-width: min(66vw, 280px) !important;
+  }
+
+  .search-wrap.search-icon-only input[type="search"] {
+    right: 2.4rem;
+  }
+
+  .search-wrap.search-icon-only:focus-within input[type="search"],
+  .search-wrap.search-icon-only.active input[type="search"] {
     width: 100% !important;
     max-width: 100% !important;
   }
 
-  .month-toolbar .search-container:focus-within input[type="search"],
-  .month-toolbar .search-container.active input[type="search"] {
-    right: 0;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  .month-toolbar .search-container:focus-within .search-results,
-  .month-toolbar .search-container.active .search-results {
+  .search-wrap.search-icon-only:focus-within .search-results,
+  .search-wrap.search-icon-only.active .search-results {
     left: 0;
     right: 0;
     width: 100%;
@@ -2953,70 +2999,22 @@ html[data-theme="light"] #timeView .day-col {
   .layout,
   body.is-landscape .layout {
     height: 100dvh;
-    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
     min-height: 0 !important;
     overflow: hidden !important;
     gap: 0 !important;
     padding: 0 !important;
   }
 
-  .month-toolbar,
-  .topbar.calendar-toolbar,
-  body.is-landscape .month-toolbar,
-  body.is-landscape .topbar.calendar-toolbar {
-    flex: 0 0 auto;
-    width: 100%;
-    margin: 0 !important;
-    padding: 4px 8px !important;
-    display: grid;
-    grid-template-columns: 48px 1fr 48px 42px;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .month-toolbar .toolbar-left,
-  .month-toolbar .toolbar-right,
-  body.is-landscape .month-toolbar .toolbar-left,
-  body.is-landscape .month-toolbar .toolbar-right {
-    display: contents;
-  }
-
-  .month-toolbar .toolbar-center,
-  body.is-landscape .month-toolbar .toolbar-center {
-    grid-column: 2;
-    position: static !important;
-    transform: none !important;
-    pointer-events: auto !important;
-    min-width: 0;
-    display: flex;
-    justify-content: center;
-  }
-
-  .month-toolbar #prevMonthBtn,
-  body.is-landscape .month-toolbar #prevMonthBtn {
-    grid-column: 1;
-    justify-self: center;
-  }
-
-  .month-toolbar #nextMonthBtn,
-  body.is-landscape .month-toolbar #nextMonthBtn {
-    grid-column: 3;
-    justify-self: center;
-  }
-
-  .month-toolbar .search-container,
-  .month-toolbar #searchWrap,
-  body.is-landscape .month-toolbar .search-container,
-  body.is-landscape .month-toolbar #searchWrap {
-    grid-column: 4;
-    justify-self: end;
-  }
-
-  #menuBtn,
-  #cornerBrand,
-  #todayBtn,
-  #syncStatusPill {
-    display: none !important;
+  .calendar-container,
+  body.is-landscape .calendar-container {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   #monthView,
@@ -3041,9 +3039,27 @@ html[data-theme="light"] #timeView .day-col {
     padding-right: 0 !important;
   }
 
+  #monthView.calendar-container.month-view,
+  body.is-landscape #monthView.calendar-container.month-view {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
   #calendarGrid,
   body.is-landscape #calendarGrid {
     grid-template-columns: repeat(7, 1fr) !important;
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  .calendar-day,
+  .day,
+  .day-cell,
+  body.is-landscape .calendar-day,
+  body.is-landscape .day,
+  body.is-landscape .day-cell {
+    min-height: 0 !important;
+    height: calc((100dvh - 130px) / 6);
   }
 
   .calendar-nav,
