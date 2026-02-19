@@ -254,11 +254,9 @@ html[data-theme="light"] .search-wrap input[type="search"]{
   min-width:2.35rem;
   max-width:2.35rem;
   margin-left:0;
-  justify-content:center;
-}
-.search-wrap.search-icon-only input[type="search"],
-.search-wrap.search-icon-only .search-results{
-  display:none !important;
+  justify-content:flex-end;
+  position:relative;
+  overflow:visible;
 }
 .search-wrap.search-icon-only .search-icon-only-btn{
   width:2.2rem;
@@ -278,6 +276,46 @@ html[data-theme="light"] .search-wrap input[type="search"]{
 html[data-theme="light"] .search-wrap.search-icon-only .search-icon-only-btn{
   border-color:rgba(17,24,39,.14);
   background:rgba(17,24,39,.04);
+}
+.search-wrap.search-icon-only input[type="search"]{
+  position:absolute;
+  top:50%;
+  right:2.6rem;
+  transform:translateY(-50%);
+  width:0;
+  max-width:0;
+  min-width:0;
+  padding:0;
+  border:0;
+  opacity:0;
+  pointer-events:none;
+  transition:
+    width 170ms cubic-bezier(.4,0,.2,1),
+    max-width 170ms cubic-bezier(.4,0,.2,1),
+    opacity 170ms cubic-bezier(.4,0,.2,1),
+    padding 170ms cubic-bezier(.4,0,.2,1),
+    border-color 170ms cubic-bezier(.4,0,.2,1);
+}
+.search-wrap.search-icon-only:focus-within input[type="search"],
+.search-wrap.search-icon-only.active input[type="search"]{
+  width:min(62vw,260px);
+  max-width:min(62vw,260px);
+  padding:.52rem .7rem;
+  border:1px solid rgba(255,255,255,.12);
+  opacity:1;
+  pointer-events:auto;
+}
+html[data-theme="light"] .search-wrap.search-icon-only:focus-within input[type="search"],
+html[data-theme="light"] .search-wrap.search-icon-only.active input[type="search"]{
+  border-color:rgba(17,24,39,.12);
+}
+.search-wrap.search-icon-only .search-results{
+  left:auto;
+  right:2.6rem;
+  width:min(72vw,320px);
+}
+.search-wrap.search-icon-only:not(:focus-within):not(.active) .search-results{
+  display:none !important;
 }
 
 .search-results{
@@ -2722,76 +2760,137 @@ html[data-theme="light"] #timeView .day-col {
    ============================================================ */
 @media (max-width: 768px) {
   body {
-    height: 100dvh !important;
-    min-height: 100dvh !important;
+    height: 100dvh;
+    min-height: 100dvh;
     overflow: hidden !important;
     display: flex;
     flex-direction: column;
   }
 
-  .toolbar,
-  .topbar.calendar-toolbar {
-    flex: 0 0 auto;
-  }
-
   .layout {
+    height: 100dvh;
     flex: 1 1 auto;
     min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    gap: 8px;
-    padding: 8px;
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
-  .layout > section,
+  .month-toolbar,
+  .topbar.calendar-toolbar {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0 !important;
+    padding: 6px 8px;
+    display: grid;
+    grid-template-columns: 48px 1fr 48px 42px;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .month-toolbar .toolbar-left,
+  .month-toolbar .toolbar-right {
+    display: contents;
+  }
+
+  .month-toolbar .toolbar-center {
+    grid-column: 2;
+    position: static !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .month-toolbar .month-title,
+  .month-toolbar #currentMonthLabel {
+    width: 100%;
+    margin: 0;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .month-toolbar #prevMonthBtn {
+    grid-column: 1;
+    justify-self: center;
+  }
+
+  .month-toolbar #nextMonthBtn {
+    grid-column: 3;
+    justify-self: center;
+  }
+
+  .month-toolbar .search-container,
+  .month-toolbar #searchWrap {
+    grid-column: 4;
+    justify-self: end;
+  }
+
+  #menuBtn,
+  #cornerBrand,
+  #todayBtn,
+  #syncStatusPill {
+    display: none !important;
+  }
+
+  .calendar-panel,
+  .time-panel,
   .calendar-container,
+  .month-view,
   #monthView,
   #timeView,
   #weekViewShell {
     flex: 1 1 auto;
     min-height: 0 !important;
-  }
-
-  .calendar-container,
-  #monthView,
-  #timeView {
-    display: flex !important;
-    flex-direction: column !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x !important;
-  }
-
-  #weekViewShell {
-    display: flex !important;
-    flex-direction: column !important;
+    width: 100% !important;
     overflow: hidden !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
   }
 
   .calendar-grid,
+  #calendarGrid,
+  .month-view,
   #monthView .weekday-row,
-  #monthView #calendarGrid,
   #timeView #timeDaysHeader,
   #timeView #timeGrid {
-    min-width: 900px !important;
+    min-width: 100% !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
   }
 
-  #monthView #calendarGrid {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    height: 100%;
-    overflow-y: hidden !important;
-    grid-auto-rows: minmax(0, 1fr) !important;
+  .calendar-grid,
+  #calendarGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr) !important;
+    overflow: hidden !important;
+    gap: 0 !important;
   }
 
-  #timeView #timeGrid {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: hidden !important;
+  #timeDaysHeader,
+  #timeGrid,
+  #timeGrid.time-grid,
+  #timeGrid.time-grid.week-body {
+    min-width: 100% !important;
+    width: 100% !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    overflow: hidden !important;
+  }
+
+  .calendar-nav,
+  .jump-row,
+  .bottom-navigation,
+  .mobile-month-switcher,
+  .view-switcher {
+    display: none !important;
   }
 
   #calendarGrid .day,
@@ -2807,46 +2906,152 @@ html[data-theme="light"] #timeView .day-col {
   #timeGrid > .day-column {
     scroll-snap-align: start;
   }
+
+  .search-container {
+    display: block;
+  }
+
+  .search-container.active,
+  .search-container:focus-within {
+    display: block;
+    width: 100%;
+  }
+
+  .month-toolbar .search-container:focus-within,
+  .month-toolbar .search-container.active {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .month-toolbar .search-container:focus-within input[type="search"],
+  .month-toolbar .search-container.active input[type="search"] {
+    right: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .month-toolbar .search-container:focus-within .search-results,
+  .month-toolbar .search-container.active .search-results {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 1024px) and (orientation: landscape) {
-  body {
+  body,
+  body.is-landscape {
+    overflow: hidden !important;
     height: 100dvh !important;
     min-height: 100dvh !important;
-    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
   }
 
-  .topbar.calendar-toolbar {
-    min-height: 48px;
-    padding: 6px 10px;
-    gap: 8px;
-  }
-
-  .layout {
+  .layout,
+  body.is-landscape .layout {
+    height: 100dvh;
     flex: 1 1 auto;
     min-height: 0 !important;
     overflow: hidden !important;
-    gap: 6px;
-    padding: 6px;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  .month-toolbar,
+  .topbar.calendar-toolbar,
+  body.is-landscape .month-toolbar,
+  body.is-landscape .topbar.calendar-toolbar {
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0 !important;
+    padding: 4px 8px !important;
+    display: grid;
+    grid-template-columns: 48px 1fr 48px 42px;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .month-toolbar .toolbar-left,
+  .month-toolbar .toolbar-right,
+  body.is-landscape .month-toolbar .toolbar-left,
+  body.is-landscape .month-toolbar .toolbar-right {
+    display: contents;
+  }
+
+  .month-toolbar .toolbar-center,
+  body.is-landscape .month-toolbar .toolbar-center {
+    grid-column: 2;
+    position: static !important;
+    transform: none !important;
+    pointer-events: auto !important;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .month-toolbar #prevMonthBtn,
+  body.is-landscape .month-toolbar #prevMonthBtn {
+    grid-column: 1;
+    justify-self: center;
+  }
+
+  .month-toolbar #nextMonthBtn,
+  body.is-landscape .month-toolbar #nextMonthBtn {
+    grid-column: 3;
+    justify-self: center;
+  }
+
+  .month-toolbar .search-container,
+  .month-toolbar #searchWrap,
+  body.is-landscape .month-toolbar .search-container,
+  body.is-landscape .month-toolbar #searchWrap {
+    grid-column: 4;
+    justify-self: end;
+  }
+
+  #menuBtn,
+  #cornerBrand,
+  #todayBtn,
+  #syncStatusPill {
+    display: none !important;
   }
 
   #monthView,
   #timeView,
-  #weekViewShell {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    touch-action: pan-x !important;
-  }
-
+  #weekViewShell,
+  body.is-landscape #monthView,
+  body.is-landscape #timeView,
+  body.is-landscape #weekViewShell,
   #monthView .weekday-row,
   #monthView #calendarGrid,
   #timeView #timeDaysHeader,
-  #timeView #timeGrid {
-    min-width: 1100px !important;
+  #timeView #timeGrid,
+  body.is-landscape #monthView .weekday-row,
+  body.is-landscape #monthView #calendarGrid,
+  body.is-landscape #timeView #timeDaysHeader,
+  body.is-landscape #timeView #timeGrid {
+    min-width: 100% !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  #calendarGrid,
+  body.is-landscape #calendarGrid {
+    grid-template-columns: repeat(7, 1fr) !important;
+  }
+
+  .calendar-nav,
+  .jump-row,
+  .bottom-navigation,
+  .mobile-month-switcher,
+  .view-switcher {
+    display: none !important;
   }
 }
 

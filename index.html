@@ -66,7 +66,7 @@
   </section>
 
   <!-- Topbar -->
-  <header class="topbar calendar-toolbar">
+  <header class="topbar calendar-toolbar month-toolbar">
     <div class="toolbar-left top-month-nav calendar-header" role="group" aria-label="Navegacion mensual">
       <button id="menuBtn" class="hamburger" aria-label="Abrir menu" aria-expanded="false" aria-controls="drawer">
         <span></span><span></span><span></span>
@@ -77,13 +77,13 @@
     </div>
 
     <div class="toolbar-center">
-      <h1 class="app-title" id="currentMonthLabel" aria-live="polite">mayo 2026</h1>
+      <h1 class="app-title month-title" id="currentMonthLabel" aria-live="polite">mayo 2026</h1>
     </div>
 
     <div class="toolbar-right">
       <div id="syncStatusPill" class="sync-status-pill" role="status" aria-live="polite">Sync OK · Pendientes: 0 · Último: --</div>
       <button id="nextMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes siguiente">&#9654;</button>
-      <form class="search-wrap search-icon-only" id="searchWrap" role="search">
+      <form class="search-wrap search-icon-only search-container" id="searchWrap" role="search">
         <input
           id="searchInput"
           class="calendar-search"
