@@ -249,6 +249,37 @@ html[data-theme="light"] .search-wrap input[type="search"]{
 .search-wrap input[type="search"]:focus{ border-color:var(--primary); box-shadow:0 0 0 3px var(--ring) }
 .search-wrap .ghost{ background:transparent; border:0; color:var(--muted); font-size:1.1rem; cursor:pointer }
 
+.search-wrap.search-icon-only{
+  width:2.35rem !important;
+  min-width:2.35rem;
+  max-width:2.35rem;
+  margin-left:0;
+  justify-content:center;
+}
+.search-wrap.search-icon-only input[type="search"],
+.search-wrap.search-icon-only .search-results{
+  display:none !important;
+}
+.search-wrap.search-icon-only .search-icon-only-btn{
+  width:2.2rem;
+  height:2.2rem;
+  min-width:2.2rem;
+  padding:0;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1rem;
+  line-height:1;
+}
+html[data-theme="light"] .search-wrap.search-icon-only .search-icon-only-btn{
+  border-color:rgba(17,24,39,.14);
+  background:rgba(17,24,39,.04);
+}
+
 .search-results{
   position:absolute; top:42px; left:0; right:0; max-height:320px; overflow:auto; z-index:60;
   background:var(--panel);
@@ -2690,71 +2721,22 @@ html[data-theme="light"] #timeView .day-col {
    Mobile viewport + horizontal calendar scroll hard fix
    ============================================================ */
 @media (max-width: 768px) {
-  html,
   body {
-    height: 100%;
-    overflow-y: hidden !important;
-    overscroll-behavior: none;
-  }
-
-  body {
-    min-height: 100vh;
-    height: 100vh;
-    overflow-x: hidden;
-    overflow-y: hidden !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
     display: flex;
     flex-direction: column;
   }
 
+  .toolbar,
   .topbar.calendar-toolbar {
-    width: 100%;
-    flex-direction: column !important;
-    align-items: stretch !important;
-    justify-content: flex-start !important;
-    gap: 10px !important;
-    padding: 10px 12px;
-    position: relative;
-  }
-
-  .topbar.calendar-toolbar .toolbar-left,
-  .topbar.calendar-toolbar .toolbar-center,
-  .topbar.calendar-toolbar .toolbar-right {
-    width: 100%;
-    min-width: 0 !important;
-    max-width: 100%;
-  }
-
-  .topbar.calendar-toolbar .toolbar-left,
-  .topbar.calendar-toolbar .toolbar-right {
-    flex-wrap: wrap;
-    justify-content: flex-start !important;
-    gap: 8px;
-  }
-
-  .topbar.calendar-toolbar .toolbar-center {
-    position: static !important;
-    transform: none !important;
-    pointer-events: auto !important;
-    justify-content: flex-start !important;
-  }
-
-  .topbar.calendar-toolbar #currentMonthLabel {
-    width: 100%;
-    text-align: left;
-  }
-
-  .topbar.calendar-toolbar .search-wrap,
-  .topbar.calendar-toolbar .search-wrap input[type="search"],
-  .topbar.calendar-toolbar .calendar-search {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
+    flex: 0 0 auto;
   }
 
   .layout {
     flex: 1 1 auto;
     min-height: 0 !important;
-    height: 100vh;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -2762,20 +2744,20 @@ html[data-theme="light"] #timeView .day-col {
     padding: 8px;
   }
 
-  .layout > section {
+  .layout > section,
+  .calendar-container,
+  #monthView,
+  #timeView,
+  #weekViewShell {
+    flex: 1 1 auto;
     min-height: 0 !important;
   }
 
+  .calendar-container,
   #monthView,
   #timeView {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow: hidden !important;
-  }
-
-  #monthView {
     overflow-x: auto !important;
     overflow-y: hidden !important;
     scroll-snap-type: x mandatory;
@@ -2785,55 +2767,37 @@ html[data-theme="light"] #timeView .day-col {
   }
 
   #weekViewShell {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x !important;
+    overflow: hidden !important;
   }
 
+  .calendar-grid,
   #monthView .weekday-row,
   #monthView #calendarGrid,
-  #weekViewShell #timeDaysHeader,
-  #weekViewShell #timeGrid {
-    min-width: 860px !important;
-  }
-
-  #monthView #calendarGrid,
-  #weekViewShell #timeGrid {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: hidden !important;
+  #timeView #timeDaysHeader,
+  #timeView #timeGrid {
+    min-width: 900px !important;
   }
 
   #monthView #calendarGrid {
-    overflow-x: visible !important;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    grid-template-columns: repeat(7, minmax(120px, 1fr)) !important;
-    grid-auto-rows: minmax(0, 1fr) !important;
-    height: 100% !important;
-  }
-
-  #weekViewShell #timeDaysHeader,
-  #weekViewShell #timeGrid {
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100%;
     overflow-y: hidden !important;
-    touch-action: pan-x !important;
+    grid-auto-rows: minmax(0, 1fr) !important;
   }
 
-  html body #calendarGrid .day,
-  html body #calendarGrid .calendar-day,
-  html body #timeGrid .day-col,
-  html body #timeGrid .day-column {
+  #timeView #timeGrid {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: hidden !important;
+  }
+
+  #calendarGrid .day,
+  #calendarGrid .calendar-day,
+  #timeGrid .day-col,
+  #timeGrid .day-column {
     min-height: 0 !important;
   }
 
@@ -2842,6 +2806,47 @@ html[data-theme="light"] #timeView .day-col {
   #timeGrid > .day-col,
   #timeGrid > .day-column {
     scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+  body {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .topbar.calendar-toolbar {
+    min-height: 48px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  #monthView,
+  #timeView,
+  #weekViewShell {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    touch-action: pan-x !important;
+  }
+
+  #monthView .weekday-row,
+  #monthView #calendarGrid,
+  #timeView #timeDaysHeader,
+  #timeView #timeGrid {
+    min-width: 1100px !important;
   }
 }
 

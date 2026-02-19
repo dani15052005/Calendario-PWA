@@ -2,7 +2,10 @@
 <html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
   <meta http-equiv="Content-Security-Policy"
   content="
   default-src 'self';
@@ -80,7 +83,7 @@
     <div class="toolbar-right">
       <div id="syncStatusPill" class="sync-status-pill" role="status" aria-live="polite">Sync OK · Pendientes: 0 · Último: --</div>
       <button id="nextMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes siguiente">&#9654;</button>
-      <form class="search-wrap" id="searchWrap" role="search">
+      <form class="search-wrap search-icon-only" id="searchWrap" role="search">
         <input
           id="searchInput"
           class="calendar-search"
@@ -88,7 +91,15 @@
           placeholder='Buscar... ej. "reunion", "Madrid", "Ana"'
           aria-label="Buscar eventos"
           autocomplete="off" />
-        <button id="clearSearch" type="button" class="ghost" title="Limpiar busqueda" aria-label="Limpiar busqueda">x</button>
+        <button
+          id="clearSearch"
+          type="button"
+          class="ghost search-icon-only-btn"
+          title="Buscar"
+          aria-label="Buscar eventos"
+        >
+          🔍
+        </button>
         <div id="searchResults" class="search-results" aria-live="polite"></div>
       </form>
     </div>
