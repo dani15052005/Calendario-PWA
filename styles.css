@@ -3013,3 +3013,48 @@ html[data-theme="light"] #timeView .day-col {
     scroll-behavior:auto !important;
   }
 }
+
+/* ============================= */
+/* MÓVIL VERTICAL (sin scroll)  */
+/* ============================= */
+@media (max-width: 768px) and (orientation: portrait) {
+
+  html, body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .layout {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .calendar-container {
+    flex: 1;
+    overflow: hidden;
+  }
+}
+
+
+/* ============================= */
+/* MÓVIL HORIZONTAL (scroll OK) */
+/* ============================= */
+@media (max-width: 768px) and (orientation: landscape) {
+
+  html, body {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .layout {
+    height: auto;
+    overflow: visible;
+  }
+
+  .calendar-container {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
