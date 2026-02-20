@@ -8023,6 +8023,58 @@ const GOOGLE_REMOTE_MISSING_QUARANTINE_MINUTES = 10;
 const GOOGLE_REMOTE_MISSING_QUARANTINE_MS = GOOGLE_REMOTE_MISSING_QUARANTINE_MINUTES * 60 * 1000;
 const GOOGLE_SYNC_TOKEN_STORAGE_PREFIX = 'google.sync.nextSyncToken.';
 const GOOGLE_SYNC_TOKEN_STORAGE_LEGACY_KEY = 'google.sync.nextSyncToken';
+const LEGACY_SYNC_CURSOR_UPDATED = `${'updated'}${'Min'}`;
+const LEGACY_SYNC_CURSOR_STORED_UPDATED = `${'stored'}${'Updated'}${'Min'}`;
+const LEGACY_SYNC_CURSOR_LAST_SYNC = `${'last'}${'Sync'}`;
+const LEGACY_SYNC_CURSOR_LAST_SYNC_DATE = `${'last'}${'Sync'}${'Date'}`;
+const LEGACY_SYNC_CURSOR_GOOGLE_SYNC_DATE = `${'google'}${'Sync'}${'Date'}`;
+const GOOGLE_SYNC_LEGACY_CURSOR_STORAGE_KEYS = Object.freeze([
+  LEGACY_SYNC_CURSOR_UPDATED,
+  LEGACY_SYNC_CURSOR_STORED_UPDATED,
+  LEGACY_SYNC_CURSOR_LAST_SYNC,
+  LEGACY_SYNC_CURSOR_LAST_SYNC_DATE,
+  LEGACY_SYNC_CURSOR_GOOGLE_SYNC_DATE,
+  `google.sync.${LEGACY_SYNC_CURSOR_UPDATED}`,
+  `google.sync.${LEGACY_SYNC_CURSOR_STORED_UPDATED}`,
+  `google.sync.${LEGACY_SYNC_CURSOR_LAST_SYNC}`,
+  `google.sync.${LEGACY_SYNC_CURSOR_LAST_SYNC_DATE}`,
+  `google.sync.${LEGACY_SYNC_CURSOR_GOOGLE_SYNC_DATE}`,
+  `google.${LEGACY_SYNC_CURSOR_UPDATED}`,
+  `google.${LEGACY_SYNC_CURSOR_LAST_SYNC}`,
+  `google.${LEGACY_SYNC_CURSOR_LAST_SYNC_DATE}`,
+  'google.syncDate',
+  'google.sync.updated_min',
+  'google.sync.last_sync'
+]);
+const GOOGLE_SYNC_LEGACY_CURSOR_STORAGE_PREFIXES = Object.freeze([
+  `google.sync.${LEGACY_SYNC_CURSOR_UPDATED}.`,
+  `google.sync.${LEGACY_SYNC_CURSOR_STORED_UPDATED}.`,
+  `google.sync.${LEGACY_SYNC_CURSOR_LAST_SYNC}.`,
+  `google.sync.${LEGACY_SYNC_CURSOR_LAST_SYNC_DATE}.`,
+  `google.sync.${LEGACY_SYNC_CURSOR_GOOGLE_SYNC_DATE}.`,
+  `google.${LEGACY_SYNC_CURSOR_UPDATED}.`,
+  `google.${LEGACY_SYNC_CURSOR_LAST_SYNC}.`,
+  `google.${LEGACY_SYNC_CURSOR_LAST_SYNC_DATE}.`
+]);
+
+function clearLegacyGoogleSyncCursorStorage() {
+  try {
+    for (const key of GOOGLE_SYNC_LEGACY_CURSOR_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const matchesLegacyPrefix = GOOGLE_SYNC_LEGACY_CURSOR_STORAGE_PREFIXES
+        .some((prefix) => key.startsWith(prefix));
+      if (matchesLegacyPrefix) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (err) {
+    void err;
+  }
+}
 
 function getGoogleSyncTokenStorageKey(calendarId = 'primary') {
   const normalized = normalizeGoogleCalendarId(calendarId, 'primary');
@@ -8423,65 +8475,6 @@ async function sbFetchLinkedGoogleEventsInRange({ fromISO = null, toISO = null, 
   return filtered;
 }
 
-async function sbGetSyncWatermark({ fallbackSinceISO = GOOGLE_SYNC_DEFAULTS.sinceISO, calendarId = null } = {}) {
-  const ctx = await getReadDataContext();
-  const watermarkColumn = getEventWatermarkColumnName();
-  const targetCalendarId = calendarId ? normalizeGoogleCalendarId(calendarId, 'primary') : null;
-  const { data, error } = await runEventSelectWithProfileFallback(
-    ctx,
-    'get_sync_watermark',
-    {
-      filters: {
-        user_id: ctx.userId,
-        watermark_column: watermarkColumn,
-        google_calendar_id: targetCalendarId
-      },
-      params: { limit: 1 }
-    },
-    () => {
-      const col = getEventWatermarkColumnName();
-      let query = ctx.supabase
-        .from(SB_TABLES.events)
-        .select(col)
-        .eq('user_id', ctx.userId)
-        .not(col, 'is', null);
-
-      if (targetCalendarId && !isMinimalEventProfile()) {
-        if (isPrimaryCalendarId(targetCalendarId)) {
-          query = query.or('google_calendar_id.eq.primary,google_calendar_id.is.null');
-        } else {
-          query = query.eq('google_calendar_id', targetCalendarId);
-        }
-      }
-
-      return query.order(col, { ascending: false })
-        .limit(1)
-        .maybeSingle();
-    }
-  );
-  if (error) throw error;
-
-  const col = getEventWatermarkColumnName();
-  const maxLastSyncedAt = data?.[col] || null;
-  if (!maxLastSyncedAt) {
-    return {
-      bootstrap: true,
-      maxLastSyncedAt: null,
-      updatedMinISO: safeISODateTime(fallbackSinceISO) || GOOGLE_SYNC_DEFAULTS.sinceISO
-    };
-  }
-
-  // Restamos 1s para evitar huecos por igualdad exacta de timestamp entre sesiones.
-  const dt = new Date(maxLastSyncedAt);
-  dt.setSeconds(dt.getSeconds() - 1);
-
-  return {
-    bootstrap: false,
-    maxLastSyncedAt: safeISODateTime(maxLastSyncedAt),
-    updatedMinISO: dt.toISOString()
-  };
-}
-
 async function sbCountEventsWithGoogleLink() {
   const ctx = await getReadDataContext();
   logGoogleLinkColumnsUnified();
@@ -8611,110 +8604,143 @@ async function fetchGoogleEventsWindow({
   throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_token');
 
   const normalizedCalendarId = normalizeGoogleCalendarId(calendarId, 'primary');
-  const shouldIgnoreWatermark = forceBootstrap || ignoreWatermark;
-  const watermark = shouldIgnoreWatermark
-    ? {
-      bootstrap: true,
-      maxLastSyncedAt: null,
-      updatedMinISO: safeISODateTime(sinceISO) || GOOGLE_SYNC_DEFAULTS.sinceISO
-    }
-    : await sbGetSyncWatermark({
-      fallbackSinceISO: sinceISO,
-      calendarId: normalizedCalendarId
-    });
-  const storedSyncToken = shouldIgnoreWatermark
+  clearLegacyGoogleSyncCursorStorage();
+
+  const shouldBypassStoredSyncToken = forceBootstrap || ignoreWatermark;
+  const storedSyncToken = shouldBypassStoredSyncToken
     ? null
     : readStoredGoogleSyncToken(normalizedCalendarId);
-  const useStoredSyncToken = Boolean(storedSyncToken) && !watermark.bootstrap;
-  throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_watermark');
+  const useStoredSyncToken = Boolean(storedSyncToken);
+  throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_sync_token');
+
   const tm = new Date();
   tm.setFullYear(tm.getFullYear() + horizonYears);
-  const bootstrapTimeMaxISO = shouldIgnoreWatermark ? null : tm.toISOString();
-  const mode = String(modeOverride || '').trim() || (forceBootstrap
+  const fullSyncTimeMaxISO = shouldBypassStoredSyncToken ? null : tm.toISOString();
+  const requestedMode = String(modeOverride || '').trim() || (forceBootstrap
     ? 'bootstrap_full_import'
     : (useStoredSyncToken
       ? 'incremental_syncToken'
-      : (watermark.bootstrap ? 'bootstrap_full' : 'incremental_updatedMin')));
+      : 'bootstrap_full'));
 
   syncLog('pull_request', {
-    mode,
+    mode: requestedMode,
     calendarId: normalizedCalendarId,
     syncTokenUsed: useStoredSyncToken,
-    updatedMin: watermark.updatedMinISO,
-    maxLastSyncedAt: watermark.maxLastSyncedAt,
-    timeMin: sinceISO,
-    timeMax: watermark.bootstrap ? bootstrapTimeMaxISO : null
+    timeMin: useStoredSyncToken ? null : sinceISO,
+    timeMax: useStoredSyncToken ? null : fullSyncTimeMaxISO
   });
 
-  let pageToken = null;
-  const items = [];
-  let nextSyncToken = null;
+  async function fetchGoogleEventsPages(activeSyncToken = null) {
+    let pageToken = null;
+    const items = [];
+    let nextSyncToken = null;
 
-  do {
-    throwIfSyncAbortRequested('fetchGoogleEventsWindow:before_page_build');
-    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(normalizedCalendarId)}/events`);
-    if (useStoredSyncToken) {
-      url.searchParams.set('syncToken', storedSyncToken);
-    } else if (watermark.bootstrap) {
-      url.searchParams.set('timeMin', sinceISO);
-      if (bootstrapTimeMaxISO) {
-        url.searchParams.set('timeMax', bootstrapTimeMaxISO);
+    do {
+      throwIfSyncAbortRequested('fetchGoogleEventsWindow:before_page_build');
+      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(normalizedCalendarId)}/events`);
+      if (activeSyncToken) {
+        url.searchParams.set('syncToken', activeSyncToken);
+      } else {
+        url.searchParams.set('timeMin', sinceISO);
+        if (fullSyncTimeMaxISO) {
+          url.searchParams.set('timeMax', fullSyncTimeMaxISO);
+        }
+        url.searchParams.set('orderBy', 'startTime');
       }
-      url.searchParams.set('orderBy', 'startTime');
-    } else {
-      url.searchParams.set('updatedMin', watermark.updatedMinISO);
-    }
-    url.searchParams.set('singleEvents', 'true');
-    url.searchParams.set('showDeleted', 'true');
-    url.searchParams.set('maxResults', '2500');
-    url.searchParams.set(
-      'fields',
-      'items(id,etag,status,summary,location,description,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken,nextSyncToken'
-    );
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
+      url.searchParams.set('singleEvents', 'true');
+      url.searchParams.set('showDeleted', 'true');
+      url.searchParams.set('maxResults', '2500');
+      url.searchParams.set(
+        'fields',
+        'items(id,etag,status,summary,location,description,start,end,updated,attachments(fileId,title,mimeType)),nextPageToken,nextSyncToken'
+      );
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-    throwIfSyncAbortRequested('fetchGoogleEventsWindow:before_page_fetch');
-    const res = await gapiFetch(url.toString());
-    throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_page_fetch');
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      if (res.status === 410 && useStoredSyncToken) {
-        throw createGoogleSyncTokenExpiredError(normalizedCalendarId, errText);
+      throwIfSyncAbortRequested('fetchGoogleEventsWindow:before_page_fetch');
+      const res = await gapiFetch(url.toString());
+      throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_page_fetch');
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        if (res.status === 410 && activeSyncToken) {
+          throw createGoogleSyncTokenExpiredError(normalizedCalendarId, errText);
+        }
+        const shortErr = String(errText || '').trim().slice(0, 300);
+        throw new Error(shortErr ? `Calendar API error ${res.status}: ${shortErr}` : `Calendar API error ${res.status}`);
       }
-      const shortErr = String(errText || '').trim().slice(0, 300);
-      throw new Error(shortErr ? `Calendar API error ${res.status}: ${shortErr}` : `Calendar API error ${res.status}`);
-    }
-    const data = await res.json();
-    throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_page_json');
-    items.push(...(data.items || []));
-    const candidateSyncToken = String(data.nextSyncToken || '').trim();
-    if (candidateSyncToken) nextSyncToken = candidateSyncToken;
-    pageToken = data.nextPageToken || null;
-  } while (pageToken);
+      const data = await res.json();
+      throwIfSyncAbortRequested('fetchGoogleEventsWindow:after_page_json');
+      items.push(...(data.items || []));
+      const candidateSyncToken = String(data.nextSyncToken || '').trim();
+      if (candidateSyncToken) nextSyncToken = candidateSyncToken;
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
 
+    return { items, nextSyncToken };
+  }
+
+  let effectiveMode = requestedMode;
+  let usedSyncToken = useStoredSyncToken;
+  let recoveredFromSyncToken410 = false;
+  let pullResult = null;
+
+  try {
+    pullResult = await fetchGoogleEventsPages(useStoredSyncToken ? storedSyncToken : null);
+  } catch (err) {
+    if (!useStoredSyncToken || !isGoogleSyncTokenExpiredError(err)) throw err;
+    syncLog('pull_410_sync_token_recovery_start', {
+      calendarId: normalizedCalendarId,
+      mode: modeOverride || null,
+      detail: String(err.detail || err.message || '').slice(0, 300)
+    }, 'warn');
+
+    clearStoredGoogleSyncToken(normalizedCalendarId);
+    clearLegacyGoogleSyncCursorStorage();
+
+    try {
+      effectiveMode = 'recovery_full_after_410';
+      pullResult = await fetchGoogleEventsPages(null);
+      usedSyncToken = false;
+      recoveredFromSyncToken410 = true;
+      syncLog('pull_410_sync_token_recovery_success', {
+        calendarId: normalizedCalendarId,
+        mode: effectiveMode,
+        nextSyncTokenStored: !!pullResult?.nextSyncToken,
+        incomingItems: Array.isArray(pullResult?.items) ? pullResult.items.length : 0
+      }, 'warn');
+    } catch (recoveryErr) {
+      syncLog('pull_410_sync_token_recovery_failed', {
+        calendarId: normalizedCalendarId,
+        error: recoveryErr.message || String(recoveryErr)
+      }, 'error');
+      throw recoveryErr;
+    }
+  }
+
+  const items = Array.isArray(pullResult?.items) ? pullResult.items : [];
+  const nextSyncToken = String(pullResult?.nextSyncToken || '').trim() || null;
   if (nextSyncToken) {
     saveStoredGoogleSyncToken(normalizedCalendarId, nextSyncToken);
   }
 
   syncLog('pull_response', {
-    mode,
+    mode: effectiveMode,
     calendarId: normalizedCalendarId,
     totalItems: items.length,
-    syncTokenUsed: useStoredSyncToken,
+    syncTokenUsed: usedSyncToken,
+    recoveredFromSyncToken410,
     nextSyncTokenStored: !!nextSyncToken
   });
 
   return {
     items,
-    timeMaxISO: bootstrapTimeMaxISO,
+    timeMaxISO: usedSyncToken ? null : fullSyncTimeMaxISO,
     sinceISO,
     calendarId: normalizedCalendarId,
-    mode,
-    updatedMinISO: watermark.updatedMinISO,
-    maxLastSyncedAt: watermark.maxLastSyncedAt,
-    bootstrap: watermark.bootstrap,
-    usedSyncToken: useStoredSyncToken,
-    nextSyncToken
+    mode: effectiveMode,
+    bootstrap: !usedSyncToken,
+    usedSyncToken,
+    nextSyncToken,
+    recoveredFromSyncToken410
   };
 }
 
@@ -8776,60 +8802,23 @@ async function importAllFromGoogleUnlocked({
   assertGoogleSyncLockHeld('importAllFromGoogle');
   throwIfSyncAbortRequested('importAllFromGoogle:start');
   const normalizedCalendarId = normalizeGoogleCalendarId(calendarId, 'primary');
-  let pull;
-  let recoveredFromSyncToken410 = false;
-  try {
-    pull = await fetchGoogleEventsWindow({
-      calendarId: normalizedCalendarId,
-      sinceISO,
-      horizonYears,
-      interactive,
-      forceBootstrap,
-      ignoreWatermark,
-      modeOverride
-    });
-  } catch (err) {
-    if (!isGoogleSyncTokenExpiredError(err)) throw err;
-    syncLog('pull_410_sync_token_recovery_start', {
-      calendarId: normalizedCalendarId,
-      mode: modeOverride || null,
-      detail: String(err.detail || err.message || '').slice(0, 300)
-    }, 'warn');
-    clearStoredGoogleSyncToken(normalizedCalendarId);
-    try {
-      pull = await fetchGoogleEventsWindow({
-        calendarId: normalizedCalendarId,
-        sinceISO,
-        horizonYears,
-        interactive,
-        forceBootstrap: true,
-        ignoreWatermark: true,
-        modeOverride: 'recovery_full_after_410'
-      });
-      recoveredFromSyncToken410 = true;
-      syncLog('pull_410_sync_token_recovery_success', {
-        calendarId: normalizedCalendarId,
-        mode: pull.mode,
-        nextSyncTokenStored: !!pull.nextSyncToken,
-        incomingItems: Array.isArray(pull.items) ? pull.items.length : 0
-      }, 'warn');
-    } catch (recoveryErr) {
-      syncLog('pull_410_sync_token_recovery_failed', {
-        calendarId: normalizedCalendarId,
-        error: recoveryErr.message || String(recoveryErr)
-      }, 'error');
-      throw recoveryErr;
-    }
-  }
+  const pull = await fetchGoogleEventsWindow({
+    calendarId: normalizedCalendarId,
+    sinceISO,
+    horizonYears,
+    interactive,
+    forceBootstrap,
+    ignoreWatermark,
+    modeOverride
+  });
   throwIfSyncAbortRequested('importAllFromGoogle:after_pull_fetch');
   const {
     items,
     mode,
-    updatedMinISO,
-    maxLastSyncedAt,
     bootstrap,
     usedSyncToken,
-    nextSyncToken
+    nextSyncToken,
+    recoveredFromSyncToken410
   } = pull;
 
   const linkedLocal = await sbFetchLinkedGoogleEventsInRange({ calendarId: normalizedCalendarId });
@@ -8850,8 +8839,6 @@ async function importAllFromGoogleUnlocked({
   syncLog('pull_apply_start', {
     calendarId: normalizedCalendarId,
     mode,
-    updatedMin: updatedMinISO,
-    maxLastSyncedAt,
     bootstrap,
     syncTokenUsed: !!usedSyncToken,
     recoveredFromSyncToken410,
