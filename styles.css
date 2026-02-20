@@ -39,7 +39,16 @@ html[data-theme="light"]{
 }
 
 *{ box-sizing:border-box }
-html,body{ height:100% }
+html,body{
+  height:100%;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#root{
+  min-height:100dvh;
+  display:flex;
+  flex-direction:column;
+}
 body{
   margin:0;
   font-family: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Inter, Ubuntu, "Helvetica Neue", Arial, sans-serif;
@@ -2325,7 +2334,7 @@ html[data-theme="dark"] #timeGrid.time-grid.week-body {
 html[data-theme="dark"] #timeView,
 html[data-theme="dark"] #weekViewShell,
 html[data-theme="dark"] .week-view {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 html[data-theme="dark"] #timeView .day-column,
@@ -2348,7 +2357,7 @@ html[data-theme="light"] #timeGrid.time-grid.week-body {
 html[data-theme="light"] #timeView,
 html[data-theme="light"] #weekViewShell,
 html[data-theme="light"] .week-view {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 html[data-theme="light"] #timeView .day-column,
@@ -2409,7 +2418,7 @@ html[data-theme="light"] #timeView .day-col {
 @media (orientation: landscape) and (max-width: 1024px) {
   .calendar-wrapper {
     min-height: 100dvh;
-    height: 100vh;
+    height: auto;
     display: flex;
     flex-direction: column;
   }
@@ -2781,6 +2790,12 @@ html[data-theme="light"] #timeView .day-col {
     height: auto !important;
   }
 
+  .calendar-wrapper {
+    overflow-y: auto;
+    max-height: 100dvh;
+    -webkit-overflow-scrolling: touch;
+  }
+
   body.is-landscape #monthView,
   body.is-landscape #timeView {
     width: 100% !important;
@@ -2966,7 +2981,9 @@ html[data-theme="light"] #timeView .day-col {
 @media (max-width: 1024px) and (orientation: landscape) {
   body,
   body.is-landscape {
-    overflow: hidden !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .calendar-container,
@@ -3045,7 +3062,9 @@ html[data-theme="light"] #timeView .day-col {
 
   html, body {
     height: 100%;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   .layout {
@@ -3054,7 +3073,17 @@ html[data-theme="light"] #timeView .day-col {
   }
 
   .calendar-container {
-    overflow-y: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (orientation: landscape) {
+  body,
+  body.is-landscape {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
   }
 }

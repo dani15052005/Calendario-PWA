@@ -4216,7 +4216,7 @@ function injectSearchFullStyles(){
   .sf-overlay{position:fixed;inset:0;z-index:10000;display:none;align-items:flex-start;justify-content:center;
               background:rgba(0,0,0,.55);padding:12px}
   .sf-overlay.open{display:flex}
-  .sf-panel{width:min(760px,96vw);height:min(86vh,calc(100vh - 24px));background:var(--panel,#0b1020);
+  .sf-panel{width:min(760px,96vw);height:min(86vh,calc(100dvh - 24px));background:var(--panel,#0b1020);
             color:var(--text,#e6ecff);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:1rem;
             box-shadow:0 18px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden}
   .sf-header{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:inherit;position:sticky;top:0;z-index:1}
