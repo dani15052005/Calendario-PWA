@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* =========================================================
+   Calendario v2 — Tema único claro premium.
+   Tailwind v4 con tokens en @theme para acceso desde clases
+   utility (bg-bg, text-text, border-border, etc.)
+   ========================================================= */
+@theme {
+  /* Color base */
+  --color-bg: #f7f8fb;
+  --color-bg-elevated: #ffffff;
+  --color-panel: #ffffff;
+  --color-card: #ffffff;
+  --color-surface-soft: #f1f3f9;
+  --color-surface-hover: #eef1f7;
+
+  /* Texto */
+  --color-text: #0b1020;
+  --color-text-2: #3b4254;
+  --color-muted: #6b7388;
+  --color-muted-2: #9aa1b4;
+
+  /* Bordes */
+  --color-border: rgb(15 23 42 / 0.08);
+  --color-border-strong: rgb(15 23 42 / 0.14);
+  --color-border-soft: rgb(15 23 42 / 0.05);
+
+  /* Brand */
+  --color-primary: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-50: #e0f2fe;
+  --color-primary-100: #bae6fd;
+
+  --color-danger: #dc2626;
+  --color-danger-50: #fef2f2;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 2px 6px rgb(15 23 42 / 0.05), 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 6px 20px rgb(15 23 42 / 0.07), 0 2px 6px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 18px 48px rgb(15 23 42 / 0.12), 0 6px 16px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 30px 80px rgb(15 23 42 / 0.18), 0 10px 24px rgb(15 23 42 / 0.08);
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  /* Categorías de eventos (se usan como colores de chip) */
+  --color-cat-trabajo: #1d4ed8;
+  --color-cat-evento: #0d9488;
+  --color-cat-citas: #b45309;
+  --color-cat-cumple: #9333ea;
+  --color-cat-otros: #475569;
+  --color-cat-festivo: #0284c7;
+
+  --font-sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+}
+
+/* iOS safe-area */
+:root {
+  --sat-top: env(safe-area-inset-top, 0px);
+  --sat-right: env(safe-area-inset-right, 0px);
+  --sat-bottom: env(safe-area-inset-bottom, 0px);
+  --sat-left: env(safe-area-inset-left, 0px);
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  background-image: radial-gradient(
+    ellipse 100% 60% at 50% -10%,
+    rgb(14 165 233 / 0.06),
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+/* iOS: evitar zoom automático en focus de inputs */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="email"],
+  input[type="url"],
+  input[type="search"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Scrollbars discretas */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgb(15 23 42 / 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgb(15 23 42 / 0.22); background-clip: padding-box; }
+
+/* Selección */
+::selection {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+/* Focus accesible uniforme */
+:is(button, input, select, textarea, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Animaciones reusables */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

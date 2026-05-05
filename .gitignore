@@ -14,5 +14,14 @@ Thumbs.db
 node_modules/
 npm-debug.log*
 
+# calendario-v2 (subproyecto Vite)
+calendario-v2/node_modules/
+calendario-v2/dist/
+calendario-v2/dev-dist/
+calendario-v2/.env.local
+calendario-v2/.env.development.local
+calendario-v2/.env.production.local
+calendario-v2/.vite/
+
 # Claude
 .claude/worktrees/
