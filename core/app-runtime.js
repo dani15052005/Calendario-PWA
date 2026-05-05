@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.25';
+window.__APP_VERSION__ = '1.2.26';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://cgrzvvlksfpowymuitne.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
@@ -5974,13 +5974,34 @@ async function ensureHolidayEventsForYear(year, { force = false, silent = true, 
 
     let upserted = 0;
     let deleted = 0;
+    let skippedAlreadyOK = 0;
 
     for (const [dateStr, holidayName] of expected.entries()) {
       const sameDate = existingByDate.get(dateStr) || [];
       const primary = sameDate[0] || null;
       const payload = buildHolidaySeedEvent(dateStr, holidayName, primary);
-      await sbUpsertEvent(payload);
-      upserted++;
+
+      // Skip si ya existe un festivo idéntico — evita 14*3=42 upserts redundantes
+      // en cada boot. Solo se compara lo que el dataset hardcoded controla;
+      // updated_at/created_at se ignoran (siempre cambian).
+      const sameStartDate = (primary?.startDate || primary?.date || '') === payload.startDate;
+      const alreadyOK = primary
+        && sameStartDate
+        && String(primary.title || '') === payload.title
+        && String(primary.color || '') === payload.color
+        && (primary.source === 'holiday' || primary.category === 'Festivo')
+        && primary.isHoliday === true
+        && primary.locked === true
+        && primary.allDay === true
+        && !primary.needsGCalSync
+        && !primary.gcalId;
+
+      if (alreadyOK) {
+        skippedAlreadyOK++;
+      } else {
+        await sbUpsertEvent(payload);
+        upserted++;
+      }
 
       for (let i = 1; i < sameDate.length; i++) {
         const duplicateId = String(sameDate[i]?.id || '').trim();
@@ -6008,7 +6029,8 @@ async function ensureHolidayEventsForYear(year, { force = false, silent = true, 
     }
 
     _holidaySeedState.doneYears.add(y);
-    return { year: y, upserted, deleted, skipped: false };
+    syncLog('holiday_seed_done', { year: y, upserted, deleted, skippedAlreadyOK });
+    return { year: y, upserted, deleted, skippedAlreadyOK, skipped: false };
   })().catch((err) => {
     reportDataError('sincronizar festivos', err, { silent });
     return { year: y, upserted: 0, deleted: 0, skipped: false, error: err.message || String(err) };
@@ -9872,20 +9894,41 @@ async function handleGoogleButtonClick() {
     return { disconnected: true };
   }
 
+  // 1) Abrir el popup GIS INMEDIATAMENTE tras el click (sin awaits previos).
+  //    Si entre el click y el window.open se ejecutan awaits largos (sesión
+  //    Supabase, fetch holidays, etc.), Chrome bloquea el popup por
+  //    "non-user-gesture". Llamarlo de primero garantiza el popup.
   _googleSyncBlocked = false;
-  const cycle = await runGoogleSyncCycle({ interactive: true, quiet: false, reason: 'auth' });
-  if (cycle?.skipped) {
-    showToast('Ya hay una sincronizacion Google en curso', 'info');
-    return { skipped: true };
-  }
-  if (cycle?.aborted) {
+  try {
+    await ensureGoogleToken({ interactive: true });
+  } catch (err) {
     setGoogleConnectedState(false);
-    showToast('Sync Google cancelado por cierre de sesion', 'info');
-    return { aborted: true };
+    const msg = err && err.message ? err.message : String(err || 'desconocido');
+    showToast(`No se pudo conectar con Google: ${msg}`, 'error');
+    return { error: true, message: msg };
   }
 
+  // 2) Token OK → conectado en UI, sync se dispara en background sin bloquear.
   setGoogleConnectedState(true);
-  showToast('Google conectado correctamente', 'success');
+  showToast('Google conectado. Sincronizando en segundo plano…', 'info');
+
+  runGoogleSyncCycle({ interactive: false, quiet: true, reason: 'auth' })
+    .then((cycle) => {
+      if (cycle?.skipped) return;
+      if (cycle?.aborted) {
+        setGoogleConnectedState(false);
+        return;
+      }
+      const pull = cycle?.pull || {};
+      const push = cycle?.push || {};
+      const summary = `Sync OK · +${pull.imported || 0} importados · ${push.created || 0}+${push.updated || 0} subidos`;
+      showToast(summary, 'success', 3500);
+    })
+    .catch((err) => {
+      console.error('[Google connect] Error en primera sync tras conectar:', err);
+      showToast(`Sync inicial falló: ${err.message || err}`, 'error', 5000);
+    });
+
   return { connected: true };
 }
 

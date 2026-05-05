@@ -1,1 +1,1 @@
-{ "min": "1.2.25", "latest": "1.2.25", "notes": "Pulido visual fuerte (móvil prioridad), sin emojis, sin dark mode, hamburguesa visible, flechas mes pegadas al título" }
+{ "min": "1.2.26", "latest": "1.2.26", "notes": "Boot rápido (skip holiday upserts redundantes) + Conectar Google sin bloqueo de popup" }
