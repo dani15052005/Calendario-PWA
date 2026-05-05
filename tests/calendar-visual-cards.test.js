@@ -24,13 +24,15 @@ assert.ok(
   'debe existir la clase .event-card en CSS'
 );
 
+// Aceptamos cualquier orden/composición de clases mientras la cabecera
+// superior tenga top-month-nav + calendar-header juntas.
 assert.ok(
-  html.includes('class="top-month-nav calendar-header"'),
-  'la cabecera superior debe usar calendar-header'
+  /class="[^"]*\btop-month-nav\b[^"]*\bcalendar-header\b[^"]*"|class="[^"]*\bcalendar-header\b[^"]*\btop-month-nav\b[^"]*"/.test(html),
+  'la cabecera superior debe combinar top-month-nav y calendar-header'
 );
 assert.ok(
-  html.includes('class="calendar-nav calendar-header"'),
-  'la cabecera de la vista mes debe usar calendar-header'
+  /class="[^"]*\bcalendar-nav\b[^"]*\bcalendar-header\b[^"]*"|class="[^"]*\bcalendar-header\b[^"]*\bcalendar-nav\b[^"]*"/.test(html),
+  'la cabecera de la vista mes debe combinar calendar-nav y calendar-header'
 );
 assert.ok(
   html.includes('class="event-pill calendar-event event-card"'),

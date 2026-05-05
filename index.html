@@ -1,5 +1,5 @@
 ﻿<!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta
@@ -19,9 +19,10 @@
   form-action 'self';
   ">
 
-  <!-- Colores del navegador (adaptados a claro/oscuro) -->
+  <!-- Color scheme: el tema por defecto de la app es claro -->
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
 
   <!-- PWA / iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -47,6 +48,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles-premium.css" />
   <title>Calendario PWA</title>
 </head>
 <body class="auth-lock-pending">

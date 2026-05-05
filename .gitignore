@@ -1,0 +1,18 @@
+# Material de referencia de otros proyectos (no es del repo)
+docs-from-boombapcode/
+docs-from-pwa-dieta-calorica/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Node (por si en el futuro se añade tooling)
+node_modules/
+npm-debug.log*
+
+# Claude
+.claude/worktrees/

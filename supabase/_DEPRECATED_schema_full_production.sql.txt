@@ -1,4 +1,18 @@
 -- ===============================================================
+-- ⚠️  DEPRECADO — NO EJECUTAR ⚠️
+-- ===============================================================
+-- Este archivo usa columnas (gcal_event_id, category) INCOMPATIBLES
+-- con el código actual del proyecto, que espera:
+--   google_event_id, is_holiday, source, meta, locked, gcal_updated, etc.
+--
+-- Aplicarlo en producción ROMPERÁ el SELECT de data/queries.js
+-- y todos los flujos de sync con Google Calendar.
+--
+-- El linaje correcto está en supabase/MIGRATIONS.md.
+-- Renombrado a .txt para evitar ejecución accidental.
+-- ===============================================================
+-- (contenido original conservado debajo solo por referencia histórica)
+-- ===============================================================
 -- schema_full_production.sql
 -- Supabase schema completo desde cero (idempotente)
 -- ===============================================================

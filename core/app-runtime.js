@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.19';
+window.__APP_VERSION__ = '1.2.20';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://hqwjpjlawxrmxfcyfdbx.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';

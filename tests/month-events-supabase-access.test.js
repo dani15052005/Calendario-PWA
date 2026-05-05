@@ -6,8 +6,11 @@ const runtimeSource = fs.readFileSync(
   path.join(__dirname, '..', 'core', 'app-runtime.js'),
   'utf8'
 );
+// schema_full_production.sql fue deprecado por incompatibilidad de columnas
+// (gcal_event_id vs google_event_id). Las policies canónicas viven en
+// schema_task_owner_email_rls.sql.
 const schemaSource = fs.readFileSync(
-  path.join(__dirname, '..', 'supabase', 'schema_full_production.sql'),
+  path.join(__dirname, '..', 'supabase', 'schema_task_owner_email_rls.sql'),
   'utf8'
 );
 
@@ -52,10 +55,12 @@ assert.ok(
   'debe existir logging estructurado de errores Supabase'
 );
 
-const eventsSelectPolicyRegex = /create policy events_select_owner[\s\S]*?using\s*\(\s*auth\.uid\(\)\s*=\s*user_id[\s\S]*?auth\.jwt\(\)->>'email'\s*=\s*'andres5871@gmail\.com'[\s\S]*?\)/i;
+// La policy canónica se llama events_select_owner_email (sufijo _email
+// añadido en schema_task_owner_email_rls.sql).
+const eventsSelectPolicyRegex = /create policy events_select_owner(?:_email)?[\s\S]*?using\s*\(\s*auth\.uid\(\)\s*=\s*user_id[\s\S]*?auth\.jwt\(\)\s*->>\s*'email'\s*=\s*'andres5871@gmail\.com'[\s\S]*?\)/i;
 assert.ok(
   eventsSelectPolicyRegex.test(schemaSource),
-  'events_select_owner debe exigir auth.uid() y email owner'
+  'events_select_owner_email debe exigir auth.uid() y email owner'
 );
 
 function ownerPolicyAllowsSelect({ authUid, rowUserId, email }) {
