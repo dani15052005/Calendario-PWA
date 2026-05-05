@@ -40,7 +40,8 @@
     theme = null,
     density = null
   } = {}) {
-    const fallbackTheme = theme ?? (localStorage.getItem('theme') || 'dark');
+    // Tema único: claro. localStorage queda como histórico pero no se usa.
+    const fallbackTheme = 'light';
     const fallbackDensity = density ?? (localStorage.getItem('month.density') || 'compact');
 
     return {

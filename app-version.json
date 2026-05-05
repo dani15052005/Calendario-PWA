@@ -1,1 +1,1 @@
-{ "min": "1.2.24", "latest": "1.2.24", "notes": "Login por magic link (email). Google sigue disponible para sincronización opcional desde el drawer." }
+{ "min": "1.2.25", "latest": "1.2.25", "notes": "Pulido visual fuerte (móvil prioridad), sin emojis, sin dark mode, hamburguesa visible, flechas mes pegadas al título" }

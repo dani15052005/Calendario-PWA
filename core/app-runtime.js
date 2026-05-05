@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.24';
+window.__APP_VERSION__ = '1.2.25';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://cgrzvvlksfpowymuitne.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
@@ -1558,9 +1558,11 @@ async function tx(storeNames, mode, fn) {
 }
 
 // ===================== Tema =====================
+// Tema único claro. toggleTheme se mantiene como no-op para no romper
+// callers existentes (listeners viejos, tests, etc.).
 function toggleTheme() {
-  state.theme = (state.theme === 'dark') ? 'light' : 'dark';
-  applyTheme(state.theme);
+  state.theme = 'light';
+  applyTheme('light');
 }
 
 // ===================== Drawer =====================
@@ -7333,7 +7335,8 @@ async function renderAttachmentPreview(eventId) {
     delBtn.type = 'button';
     delBtn.className = 'att-del';
     delBtn.title = 'Eliminar adjunto';
-    delBtn.textContent = '🗑️';
+    delBtn.setAttribute('aria-label', 'Eliminar adjunto');
+    delBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6m-9 4h12m-1 0l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7m4 4v6m4-6v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     delBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       handleAttachmentDelete(eventId, a);
@@ -7891,20 +7894,16 @@ registerServiceWorkerIfSupported();
 function updateCornerBrand(){
   const img = document.getElementById('cornerBrand');
   if (!img) return;
-  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-  img.src = theme === 'dark' ? 'icons/logo-dark@3x.png' : 'icons/logo-light@3x.png';
+  // Tema único claro: siempre logo light.
+  img.src = 'icons/logo-light@3x.png';
 }
 
-function applyTheme(theme) {
+function applyTheme(_theme) {
+  // Tema único: claro. Se ignora el argumento para mantener compatibilidad.
   const html = document.documentElement;
-  html.classList.add('theme-anim');
-  html.setAttribute('data-theme', theme);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = theme === 'dark' ? 'Cambiar a Light' : 'Cambiar a Dark';
-  localStorage.setItem('theme', theme);
-  try { updateCornerBrand(); } catch (_) {}
-  clearTimeout(applyTheme._tmr);
-  applyTheme._tmr = setTimeout(() => html.classList.remove('theme-anim'), 420);
+  html.setAttribute('data-theme', 'light');
+  try { localStorage.setItem('theme', 'light'); } catch (err) { void err; }
+  try { updateCornerBrand(); } catch (err) { void err; }
 }
 
 (async () => {
@@ -7959,9 +7958,9 @@ async function bootApp(){
   window.addEventListener('DOMContentLoaded', () => document.body.classList.add('tags-v2'), { once:true });
 }
 
-  // light por defecto y vista "expandida" (solo títulos, como en la foto)
-state.theme = localStorage.getItem('theme') || 'light';
-applyTheme(state.theme);
+  // Tema único: claro. No se respeta nada de localStorage en este punto.
+state.theme = 'light';
+applyTheme('light');
 state.monthDensity = localStorage.getItem('month.density') || 'expanded';
   applyMonthDensity();
   ensurePreviewCleanupOnce(); 

@@ -19,10 +19,9 @@
   form-action 'self';
   ">
 
-  <!-- Color scheme: el tema por defecto de la app es claro -->
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#0ea5e9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <!-- Tema único: claro -->
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0ea5e9">
 
   <!-- PWA / iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -89,18 +88,23 @@
       <button id="menuBtn" class="hamburger" aria-label="Abrir menu" aria-expanded="false" aria-controls="drawer">
         <span></span><span></span><span></span>
       </button>
-      <img id="cornerBrand" class="app-logo mini-calendar-icon" src="icons/logo-dark@3x.png" alt="Logo calendario" width="28" height="28" />
+      <img id="cornerBrand" class="app-logo mini-calendar-icon" src="icons/logo-light@3x.png" alt="Logo calendario" width="28" height="28" />
       <button id="todayBtn" class="primary month-today-btn today-button" aria-label="Ir a hoy">Hoy</button>
-      <button id="prevMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes anterior">&#9664;</button>
     </div>
 
-    <div class="toolbar-center">
-      <h1 class="app-title month-title" id="currentMonthLabel" aria-live="polite">mayo 2026</h1>
-    </div>
+    <div class="toolbar-center"></div>
 
     <div class="toolbar-right">
       <div id="syncStatusPill" class="sync-status-pill" role="status" aria-live="polite">Sync OK · Pendientes: 0 · Último: --</div>
-      <button id="nextMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes siguiente">&#9654;</button>
+      <div class="month-pager" role="group" aria-label="Navegación mensual">
+        <button id="prevMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h1 class="app-title month-title" id="currentMonthLabel" aria-live="polite">mayo 2026</h1>
+        <button id="nextMonthBtn" type="button" class="ghost month-nav-btn" aria-label="Mes siguiente">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
       <form class="search-wrap search-icon-only search-container" id="searchWrap" role="search">
         <input
           id="searchInput"
@@ -114,9 +118,8 @@
           type="button"
           class="ghost search-icon-only-btn"
           title="Buscar"
-          aria-label="Buscar eventos"
-        >
-          🔍
+          aria-label="Buscar eventos">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <div id="searchResults" class="search-results" aria-live="polite"></div>
       </form>
@@ -159,10 +162,6 @@
       <div id="calendarFilterList" class="checks" aria-live="polite"></div>
     </div>
 
-    <div class="drawer-section">
-      <h3>Tema</h3>
-      <button id="themeToggle" class="theme-toggle">Cambiar a Light</button>
-    </div>
     <div class="drawer-footer" id="drawerFooter">
   <span class="muted">Versión</span>
   <strong id="appVersionLabel">v-</strong>
