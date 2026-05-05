@@ -1,1 +1,1 @@
-{ "min": "1.2.23", "latest": "1.2.23", "notes": "Google OAuth client ID actualizado a 226957829260-shmlvb1an7lrkdhbj8prd5dd2eb0u17k" }
+{ "min": "1.2.24", "latest": "1.2.24", "notes": "Login por magic link (email). Google sigue disponible para sincronización opcional desde el drawer." }

@@ -58,12 +58,28 @@
   <section id="authGate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authMessage">
     <div class="auth-card">
       <h2 id="authTitle">Acceso privado</h2>
-      <p id="authMessage" class="auth-message">Comprobando sesión…</p>
+      <p id="authMessage" class="auth-message">Introduce tu email para recibir un enlace de acceso.</p>
       <p class="auth-owner">Propietario permitido: <strong>andres5871@gmail.com</strong></p>
-      <div class="auth-actions">
-        <button id="authLoginBtn" type="button" class="primary">Entrar con Google</button>
-        <button id="authLogoutBtn" type="button" class="ghost hidden">Cerrar sesión</button>
-      </div>
+
+      <form id="authMagicLinkForm" class="auth-magic-form" novalidate>
+        <input
+          id="authEmailInput"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          placeholder="andres5871@gmail.com"
+          aria-label="Email del propietario"
+          required
+        />
+        <button id="authMagicLinkBtn" type="submit" class="primary">Enviar enlace de acceso</button>
+      </form>
+
+      <details class="auth-alt">
+        <summary>O entrar con Google</summary>
+        <button id="authLoginBtn" type="button" class="ghost">Entrar con Google</button>
+      </details>
+
+      <button id="authLogoutBtn" type="button" class="ghost hidden">Cerrar sesión</button>
     </div>
   </section>
 

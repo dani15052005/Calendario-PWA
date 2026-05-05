@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.23';
+window.__APP_VERSION__ = '1.2.24';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://cgrzvvlksfpowymuitne.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
@@ -286,6 +286,8 @@ function setAuthGateState(message, kind = 'info', { showLogin = true, showLogout
   const msg = document.getElementById('authMessage');
   const loginBtn = document.getElementById('authLoginBtn');
   const logoutBtn = document.getElementById('authLogoutBtn');
+  const magicForm = document.getElementById('authMagicLinkForm');
+  const altDetails = document.querySelector('#authGate .auth-alt');
   if (!gate || !msg) return;
 
   gate.classList.remove('hidden');
@@ -294,6 +296,10 @@ function setAuthGateState(message, kind = 'info', { showLogin = true, showLogout
   if (kind === 'error') msg.classList.add('error');
   if (kind === 'ok') msg.classList.add('ok');
 
+  // El "showLogin" controla TODOS los inputs de entrada (form magic link
+  // primario + acordeón con la alternativa Google + botón Google secundario).
+  if (magicForm) magicForm.classList.toggle('hidden', !showLogin);
+  if (altDetails) altDetails.classList.toggle('hidden', !showLogin);
   if (loginBtn) loginBtn.classList.toggle('hidden', !showLogin);
   if (logoutBtn) logoutBtn.classList.toggle('hidden', !showLogout);
 }
@@ -387,6 +393,44 @@ async function withGoogleApiMutex(fn, label = 'google_api') {
   } finally {
     try { release?.(); } catch (err) { void err; }
   }
+}
+
+async function signInWithMagicLink(email){
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    lockAppUI('Configuración de Supabase incompleta. Revisa app-config.js', 'error');
+    return;
+  }
+  const helpers = getAuthHelpers();
+  const ownerEmail = String(getOwnerEmail() || '').trim();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail || cleanEmail.indexOf('@') < 1) {
+    setAuthGateState('Introduce un email válido.', 'error', { showLogin: true, showLogout: false });
+    return;
+  }
+  // Defensa pre-envío: solo se mandan magic links al email owner.
+  // Aunque alguien pase otro, lo bloqueamos ANTES de gastar email.
+  if (!helpers.isOwnerEmail(cleanEmail, ownerEmail)) {
+    setAuthGateState(`Solo ${ownerEmail} puede acceder a este calendario.`, 'error', { showLogin: true, showLogout: false });
+    return;
+  }
+  setAuthGateState('Enviando enlace…', 'info', { showLogin: false, showLogout: false });
+  const { error } = await supabase.auth.signInWithOtp({
+    email: cleanEmail,
+    options: {
+      emailRedirectTo: authRedirectTo(),
+      shouldCreateUser: true
+    }
+  });
+  if (error) {
+    setAuthGateState(`No se pudo enviar el enlace: ${error.message}`, 'error', { showLogin: true, showLogout: false });
+    return;
+  }
+  setAuthGateState(
+    `Enlace enviado a ${cleanEmail}. Revisa tu bandeja (también spam) y abre el enlace desde este mismo navegador para completar el acceso.`,
+    'ok',
+    { showLogin: false, showLogout: false }
+  );
 }
 
 async function signInWithGoogleOnly(){
@@ -643,7 +687,7 @@ async function enforcePrivateOwnerSession(session){
       return false;
     }
     lockAppUI(
-      'Inicia sesin con Google para entrar a este calendario privado.',
+      'Introduce tu email para recibir un enlace de acceso a este calendario privado.',
       'info',
       { showLogin: true, showLogout: false }
     );
@@ -657,11 +701,16 @@ async function enforcePrivateOwnerSession(session){
     ? MODULE_CORE_AUTH.getSessionProvider(session)
     : String(sessionUser?.app_metadata?.provider || '').trim().toLowerCase();
 
-  if (provider !== 'google') {
+  // Aceptamos cualquier provider compatible: 'google' (ofrece sync directo) y
+  // 'email' (magic link / otp; el sync de Google se activa después con
+  // "Conectar Google" desde el drawer). Bloqueamos solo proveedores no
+  // soportados explícitamente.
+  const ALLOWED_PROVIDERS = new Set(['google', 'email', '']);
+  if (!ALLOWED_PROVIDERS.has(provider)) {
     _googleSyncBlocked = true;
     _authBlockedByEmail = true;
     lockAppUI(
-      `Acceso bloqueado: solo se permite autenticacin con Google (proveedor detectado: ${provider || 'desconocido'}).`,
+      `Acceso bloqueado: proveedor "${provider}" no soportado. Usa el enlace por email o entra con Google.`,
       'error',
       { showLogin: true, showLogout: false }
     );
@@ -700,6 +749,27 @@ async function setupPrivateAuthGate(){
 
   const loginBtn = document.getElementById('authLoginBtn');
   const logoutBtn = document.getElementById('authLogoutBtn');
+  const magicForm = document.getElementById('authMagicLinkForm');
+  const emailInput = document.getElementById('authEmailInput');
+
+  if (magicForm && emailInput) {
+    // Pre-rellena con el último email usado (si quedó persistido).
+    try {
+      const last = localStorage.getItem('auth.lastEmail') || '';
+      if (last) emailInput.value = last;
+    } catch (err) { void err; }
+
+    magicForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const email = (emailInput.value || '').trim();
+      if (!email) return;
+      try { localStorage.setItem('auth.lastEmail', email); } catch (err) { void err; }
+      signInWithMagicLink(email).catch((err) => {
+        setAuthGateState(`Error enviando enlace: ${err.message || err}`, 'error', { showLogin: true, showLogout: false });
+      });
+    });
+  }
+
   if (loginBtn) {
     loginBtn.addEventListener('click', () => {
       signInWithGoogleOnly().catch((err) => {
@@ -711,7 +781,7 @@ async function setupPrivateAuthGate(){
     logoutBtn.addEventListener('click', async () => {
       _authBlockedByEmail = false;
       await signOutSupabase();
-      lockAppUI('Sesión cerrada. Inicia sesión con Google para continuar.', 'info', { showLogin: true, showLogout: false });
+      lockAppUI('Sesión cerrada. Introduce tu email para volver a entrar.', 'info', { showLogin: true, showLogout: false });
     });
   }
 
