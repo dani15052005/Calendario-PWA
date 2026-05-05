@@ -1,1 +1,1 @@
-{ "min": "1.2.26", "latest": "1.2.26", "notes": "Boot rápido (skip holiday upserts redundantes) + Conectar Google sin bloqueo de popup" }
+{ "min": "1.2.27", "latest": "1.2.27", "notes": "Sync Google: rechazo limpio cuando popup bloqueado (libera mutex). Pill no marca error si nunca conectaste Google." }

@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.26';
+window.__APP_VERSION__ = '1.2.27';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://cgrzvvlksfpowymuitne.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
@@ -4527,8 +4527,7 @@ on('#menuBtn','click', toggleDrawer);
 on('#closeDrawer','click', closeDrawer);
 on('#drawerBackdrop','click', closeDrawer);
 
-// Tema
-on('#themeToggle','click', toggleTheme);
+// Tema único: claro. (Dark mode eliminado en v1.2.25.)
 
 // Vista (radios)
 $$('input[name="viewMode"]').forEach(r=> on(r,'change', e => setViewMode(e.target.value)));
@@ -7481,13 +7480,31 @@ let _tokenClient = null;
 function haveGIS(){
   return !!(window.google && google.accounts && google.accounts.oauth2);
 }
+// Almacena los reject() pendientes para que el error_callback global de GIS
+// pueda rechazar la promesa correcta cuando el popup se bloquea (Chrome lo
+// hace si la llamada no es interactiva o si pasa demasiado tiempo desde el
+// gesto de usuario). Sin esto, el Promise queda colgado para siempre y el
+// mutex de sync nunca se libera.
+let _googleTokenPendingReject = null;
+
 function initTokenClient(){
   if (_tokenClient || !haveGIS()) return _tokenClient;
   _tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: GOOGLE_SCOPES,
     callback: (resp) => {}, // se sobreescribe en cada request
-    error_callback: (err) => { console.error('GIS error_callback:', err); }
+    error_callback: (err) => {
+      console.error('GIS error_callback:', err);
+      const reject = _googleTokenPendingReject;
+      _googleTokenPendingReject = null;
+      if (typeof reject === 'function') {
+        const code = err && err.type ? err.type : 'gis_error';
+        const msg = err && err.message ? err.message : code;
+        const e = new Error(`GIS_${code}: ${msg}`);
+        e.code = code;
+        reject(e);
+      }
+    }
   });
   return _tokenClient;
 }
@@ -7496,6 +7513,11 @@ function initTokenClient(){
  * ensureGoogleToken({ interactive })
  * - interactive=false  intenta recuperar token en silencio (sin prompts)
  * - interactive=true   puede mostrar consentimiento (úsalo en clicks del usuario)
+ *
+ * IMPORTANTE: con interactive=false, si no hay token cacheado y GIS necesita
+ * abrir un popup, Chrome lo bloquea por "non-user-gesture". Para no
+ * desperdiciar el callback (y dejar el mutex pillado), aquí rechazamos
+ * inmediatamente sin intentar el popup cuando no es interactivo.
  */
 function ensureGoogleToken({ interactive = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -7504,6 +7526,13 @@ function ensureGoogleToken({ interactive = false } = {}) {
       console.error(msg); return reject(new Error(msg));
     }
     if (_googleAccessToken) return resolve(_googleAccessToken);
+    if (!interactive) {
+      // Sin token cacheado y sin user-gesture: Chrome bloquea popup.
+      // Rechazamos rápido para no quedar colgados.
+      const e = new Error('NO_TOKEN_NON_INTERACTIVE');
+      e.code = 'no_token_non_interactive';
+      return reject(e);
+    }
     if (!haveGIS()) {
       const msg = 'Google Identity Services no cargado.';
       console.error(msg); return reject(new Error(msg));
@@ -7511,6 +7540,7 @@ function ensureGoogleToken({ interactive = false } = {}) {
 
     const client = initTokenClient();
     client.callback = (resp) => {
+      _googleTokenPendingReject = null;
       if (resp && resp.access_token) {
         _googleAccessToken = resp.access_token;
         setGoogleConnectedState(true);
@@ -7521,11 +7551,20 @@ function ensureGoogleToken({ interactive = false } = {}) {
       reject(new Error(err));
     };
 
+    // Registramos el reject para que el error_callback global de GIS pueda
+    // rechazar la promesa cuando el popup se bloquee.
+    _googleTokenPendingReject = (e) => {
+      // safety: solo rechazamos una vez
+      _googleTokenPendingReject = null;
+      reject(e);
+    };
+
     try {
       client.requestAccessToken({
-        prompt: interactive ? 'consent' : '' // silencioso si no es interactivo
+        prompt: 'consent' // siempre consent en interactivo (el silencioso ya rechazó arriba)
       });
     } catch (e) {
+      _googleTokenPendingReject = null;
       reject(e);
     }
   });
@@ -9688,13 +9727,22 @@ async function runGoogleSyncCycle({
         setSyncStatus('offline', { detail: 'Sync cancelado' });
         return { aborted: true, reason: 'sync_aborted' };
       }
+      const errCode = err && err.code ? String(err.code) : '';
+      const isNoTokenSilent = errCode === 'no_token_non_interactive';
       syncLog('cycle_no_token', {
         reason,
-        error: err.message || String(err)
+        error: err.message || String(err),
+        code: errCode || null
       }, interactive ? 'error' : 'warn');
-      setSyncStatus('error', { detail: 'Token Google no disponible' });
+      // Si el usuario nunca conectó Google, no marcamos "error" — la app
+      // funciona perfectamente sin sync. Pill neutra "ok" / sin Google.
+      if (isNoTokenSilent) {
+        setSyncStatus('ok', { detail: 'Sin Google conectado' });
+      } else {
+        setSyncStatus('error', { detail: 'Token Google no disponible' });
+      }
       if (interactive) throw err;
-      return { skipped: true, reason: 'no_google_token', error: err.message || String(err) };
+      return { skipped: true, reason: 'no_google_token', error: err.message || String(err), code: errCode || null };
     }
 
     const pull = createEmptyPullStats();
