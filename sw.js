@@ -1,4 +1,4 @@
-const CACHE_NAME = 'app-v1.2.20';
+const CACHE_NAME = 'app-v1.2.21';
 const STATIC_ASSETS = [
   './', './index.html', './styles.css', './styles-premium.css', './script.js',
   './core/app-runtime.js',

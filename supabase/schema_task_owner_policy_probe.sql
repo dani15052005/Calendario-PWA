@@ -1,5 +1,9 @@
 -- Task: RPC defensiva para verificar que RLS owner-email esta activa
 -- Ejecutar despues de schema_task_owner_email_rls.sql
+--
+-- Nota: Postgres re-emite las expresiones de policy con casts ::text añadidos,
+-- por eso comprobamos por substring del email literal y de auth.uid() en vez
+-- de exigir un patrón con la sintaxis exacta auth.jwt() ->> 'email' = '...'.
 
 begin;
 
@@ -14,7 +18,6 @@ set search_path = public, pg_catalog
 as $$
 declare
   owner_email text := lower(trim(coalesce(expected_owner_email, '')));
-  owner_expr text;
   table_name text;
   tables text[] := array['users', 'events', 'attachments'];
   missing_tables text[] := '{}';
@@ -34,8 +37,6 @@ begin
       'reason', 'missing_owner_email'
     );
   end if;
-
-  owner_expr := format('auth.jwt() ->> ''email'' = ''%s''', owner_email);
 
   foreach table_name in array tables loop
     if not exists (
@@ -75,12 +76,12 @@ begin
         and p.tablename = table_name
         and (
           (
-            coalesce(p.qual, '') not ilike ('%' || owner_expr || '%')
-            and coalesce(p.with_check, '') not ilike ('%' || owner_expr || '%')
+            position(owner_email in lower(coalesce(p.qual, ''))) = 0
+            and position(owner_email in lower(coalesce(p.with_check, ''))) = 0
           )
           or (
-            coalesce(p.qual, '') not ilike '%auth.uid()%'
-            and coalesce(p.with_check, '') not ilike '%auth.uid()%'
+            position('auth.uid()' in lower(coalesce(p.qual, ''))) = 0
+            and position('auth.uid()' in lower(coalesce(p.with_check, ''))) = 0
           )
         )
     );
