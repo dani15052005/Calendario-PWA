@@ -1,7 +1,7 @@
 ﻿window.__APP_BOOT__ = 'OK';
 console.log('[Calendario] JS cargado');
 // ===== Versionado obligatorio =====
-window.__APP_VERSION__ = '1.2.22';
+window.__APP_VERSION__ = '1.2.23';
 const VERSION_ENDPOINT = './app-version.json';
 const EXPECTED_SUPABASE_PROJECT_URL = 'https://cgrzvvlksfpowymuitne.supabase.co';
 const OWNER_EMAIL_FALLBACK = 'andres5871@gmail.com';
@@ -7368,7 +7368,7 @@ async function searchEventsAdvanced(queryRaw) {
    - Crear un OAuth 2.0 Client ID (tipo Web) y añadir tu origen HTTPS a "Authorized JavaScript origins".
    - Sustituir GOOGLE_CLIENT_ID por el tuyo.
 */
-const GOOGLE_CLIENT_ID = '873672608509-dgmd92v2k8fdesd7n5vkg46p2cq8eug4.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '226957829260-shmlvb1an7lrkdhbj8prd5dd2eb0u17k.apps.googleusercontent.com';
 
 // Scopes mínimos: leer eventos + leer ficheros adjuntos de Drive
 const GOOGLE_SCOPES = [
