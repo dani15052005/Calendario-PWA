@@ -11,16 +11,17 @@ const _isValidUrl = /^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(SUPABASE_URL)
 const _keyLooksJwt =
   SUPABASE_ANON_KEY.startsWith('eyJ') && SUPABASE_ANON_KEY.split('.').length === 3
 
-// eslint-disable-next-line no-console
-console.log('[supabase] config:', {
-  urlPresent: !!SUPABASE_URL,
-  urlValid: _isValidUrl,
-  url: SUPABASE_URL || '(vacío)',
-  keyPresent: !!SUPABASE_ANON_KEY,
-  keyLooksJwt: _keyLooksJwt,
-  keyLength: SUPABASE_ANON_KEY.length,
-  keyPrefix: SUPABASE_ANON_KEY.slice(0, 12) || '(vacío)',
-})
+// Logs sueltos (no Object) para que se vean expandidos en consola.
+/* eslint-disable no-console */
+console.log('[supabase] urlPresent =', !!SUPABASE_URL)
+console.log('[supabase] urlValid   =', _isValidUrl)
+console.log('[supabase] url        =', SUPABASE_URL || '(VACÍO)')
+console.log('[supabase] keyPresent =', !!SUPABASE_ANON_KEY)
+console.log('[supabase] keyLooksJwt=', _keyLooksJwt)
+console.log('[supabase] keyLength  =', SUPABASE_ANON_KEY.length)
+console.log('[supabase] keyPrefix  =', SUPABASE_ANON_KEY.slice(0, 12) || '(VACÍO)')
+console.log('[supabase] keySuffix  =', SUPABASE_ANON_KEY.slice(-12) || '(VACÍO)')
+/* eslint-enable no-console */
 
 if (!_isValidUrl || !_keyLooksJwt) {
   // eslint-disable-next-line no-console
