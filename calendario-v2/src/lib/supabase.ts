@@ -1,37 +1,50 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Las credenciales se inyectan desde Vercel env vars en producción.
-// En local: copiar .env.example a .env.local con tus valores reales.
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? '').toString().trim()
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').toString().trim()
+// Fallback hardcoded (anon key es público por diseño; RLS owner-email-only
+// protege los datos). Las env vars actúan como override si están bien
+// formateadas. Si están mal o faltan, usamos el fallback.
+const FALLBACK_SUPABASE_URL = 'https://cgrzvvlksfpowymuitne.supabase.co'
+const FALLBACK_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNncnp2dmxrc2Zwb3d5bXVpdG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5Mjk3MzAsImV4cCI6MjA5MzUwNTczMH0.f8mcmjnc2BUqKh_fcAHqG5trBj19Tzcx85zi-YIY618'
+
+function pickValidUrl(envValue: string): string {
+  const trimmed = envValue.trim()
+  if (/^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(trimmed)) return trimmed
+  return FALLBACK_SUPABASE_URL
+}
+
+function pickValidJwt(envValue: string): string {
+  const trimmed = envValue.trim()
+  const looksJwt = trimmed.startsWith('eyJ') && trimmed.split('.').length === 3
+  if (looksJwt) return trimmed
+  return FALLBACK_SUPABASE_ANON_KEY
+}
+
+const ENV_URL = (import.meta.env.VITE_SUPABASE_URL ?? '').toString()
+const ENV_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').toString()
+
+const SUPABASE_URL = pickValidUrl(ENV_URL)
+const SUPABASE_ANON_KEY = pickValidJwt(ENV_KEY)
 
 // Diagnóstico al arrancar — visible en F12 → Console.
-// El URL es público; el anon key también es público por diseño (RLS protege).
-const _isValidUrl = /^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(SUPABASE_URL)
-const _keyLooksJwt =
-  SUPABASE_ANON_KEY.startsWith('eyJ') && SUPABASE_ANON_KEY.split('.').length === 3
+const _envUrlValid = /^https:\/\/[a-z0-9]+\.supabase\.co$/i.test(ENV_URL.trim())
+const _envKeyValid = ENV_KEY.trim().startsWith('eyJ') && ENV_KEY.trim().split('.').length === 3
+const _usingEnvUrl = _envUrlValid && SUPABASE_URL === ENV_URL.trim()
+const _usingEnvKey = _envKeyValid && SUPABASE_ANON_KEY === ENV_KEY.trim()
 
-// Logs sueltos (no Object) para que se vean expandidos en consola.
 /* eslint-disable no-console */
-console.log('[supabase] urlPresent =', !!SUPABASE_URL)
-console.log('[supabase] urlValid   =', _isValidUrl)
-console.log('[supabase] url        =', SUPABASE_URL || '(VACÍO)')
-console.log('[supabase] keyPresent =', !!SUPABASE_ANON_KEY)
-console.log('[supabase] keyLooksJwt=', _keyLooksJwt)
-console.log('[supabase] keyLength  =', SUPABASE_ANON_KEY.length)
-console.log('[supabase] keyPrefix  =', SUPABASE_ANON_KEY.slice(0, 12) || '(VACÍO)')
-console.log('[supabase] keySuffix  =', SUPABASE_ANON_KEY.slice(-12) || '(VACÍO)')
-/* eslint-enable no-console */
-
-if (!_isValidUrl || !_keyLooksJwt) {
-  // eslint-disable-next-line no-console
-  console.error(
-    '[supabase] Configuración inválida. ' +
-      'En Vercel → Project Settings → Environment Variables verifica que existan ' +
-      'VITE_SUPABASE_URL (https://<ref>.supabase.co) y VITE_SUPABASE_ANON_KEY (JWT que empieza por eyJ). ' +
-      'Sin espacios ni saltos de línea. Después haz REDEPLOY — Vite inyecta vars en build, no runtime.'
+console.log('[supabase] url     =', SUPABASE_URL, _usingEnvUrl ? '(env var)' : '(fallback hardcoded)')
+console.log('[supabase] keyLen  =', SUPABASE_ANON_KEY.length, _usingEnvKey ? '(env var)' : '(fallback hardcoded)')
+console.log('[supabase] keyHead =', SUPABASE_ANON_KEY.slice(0, 16))
+console.log('[supabase] keyTail =', SUPABASE_ANON_KEY.slice(-12))
+if (!_usingEnvUrl || !_usingEnvKey) {
+  console.warn(
+    '[supabase] Usando fallback hardcoded en al menos una credencial — env vars de Vercel ' +
+      'están vacías o mal formadas. La app funciona igual; cuando puedas, arregla las env vars ' +
+      'y haz redeploy SIN cache.'
   )
 }
+/* eslint-enable no-console */
 
 export const supabase = createClient(
   SUPABASE_URL || 'https://invalid.invalid',
