@@ -54,7 +54,10 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      flowType: 'pkce',
+      // Implicit (default): admin generate_link y signInWithOtp ambos
+      // devuelven tokens directos en el hash. PKCE causaba que se ignoraran
+      // los tokens de admin links (incompatible con su flow).
+      flowType: 'implicit',
     },
   }
 )
