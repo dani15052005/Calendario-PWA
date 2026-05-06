@@ -81,15 +81,31 @@ export function AuthGate({ children }: AuthGateProps) {
     setState({ kind: 'sending' })
     try { localStorage.setItem('auth.lastEmail', email) } catch { /* ignore */ }
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin + window.location.pathname,
-        shouldCreateUser: true,
-      },
-    })
-    if (error) {
-      setState({ kind: 'error', message: `No se pudo enviar el enlace: ${error.message}` })
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + window.location.pathname,
+          shouldCreateUser: true,
+        },
+      })
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error('[AuthGate] signInWithOtp returned error:', error)
+        setState({ kind: 'error', message: `No se pudo enviar el enlace: ${error.message}` })
+        return
+      }
+    } catch (err) {
+      // Errores de red / fetch inválido / config rota → caen aquí.
+      // eslint-disable-next-line no-console
+      console.error('[AuthGate] signInWithOtp threw:', err)
+      const detail = err instanceof Error ? err.message : String(err)
+      setState({
+        kind: 'error',
+        message:
+          `Error de red al enviar enlace: ${detail}. Abre la consola (F12) ` +
+          `y mira los logs [supabase] al inicio para confirmar que las env vars están bien.`,
+      })
       return
     }
     setState({ kind: 'sent', email })
